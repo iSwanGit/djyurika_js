@@ -6,6 +6,7 @@ import consoleStamp from 'console-stamp';
 import { environment, keys } from './config';
 import { Song, SongQueue } from './types';
 import * as MyUtil from './util';
+import DJYurikaDB from './DJYurikaDB';
 
 consoleStamp(console, {
   pattern: 'yyyy/mm/dd HH:MM:ss.l',
@@ -13,6 +14,7 @@ consoleStamp(console, {
 
 const client = new Discord.Client();
 const queueSet = new Map<string, SongQueue>();  // song queue for each channel
+const db = new DJYurikaDB();
 
 // init
 client.once('ready', () => {
@@ -128,7 +130,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
   // get song info
   let songInfo: ytdlc.videoInfo;
   try {
-    songInfo = await ytdl.getInfo(args[1]);
+    songInfo = await getYoutubeSongInfo(args[1]);
   }
   catch (err) {
     const errMsg = err.toString().split('\n')[0];
@@ -155,8 +157,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     const queue = new SongQueue(message.channel, voiceChannel, null, [], 5, true);
     queueSet.set(message.guild.id, queue);
 
-    console.log("대기열 전송 중...");
-    queue.songs.push(song);
+    addToPlaylist(song, queue);
 
     try {
       // Voice connection
@@ -173,14 +174,14 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     catch (err) {
       console.log(err);
       queueSet.delete(message.guild.id);
-      return message.channel.send(err);
+      return message.channel.send(`\`\`\`${err}\`\`\``);
     }
     finally {
       message.channel.messages.fetch(id).then(msg => msg.delete());
     }
   } else {
-    console.log("대기열 전송 중...");
-    serverQueue.songs.push(song);
+    addToPlaylist(song, serverQueue);
+
     message.channel.messages.fetch(id).then(msg => msg.delete());
     
     const embedMessage = new Discord.MessageEmbed()
@@ -292,7 +293,7 @@ function stop(message: Discord.Message, serverQueue: SongQueue) {
       message.channel.send("👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!");
     }
     catch (err) {
-      console.log(err);
+      console.error(err);
     }
   }
  
@@ -309,16 +310,41 @@ function onDisconnect(serverQueue: SongQueue) {
   console.log('음성 채널 연결 종료됨');
 }
 
+async function addToPlaylist(song: Song, queue: SongQueue) {
+  console.log("대기열 전송 중...");
+  queue.songs.push(song);
+
+  // db check
+  const exist = await db.checkSongRegistered(song.id);
+  if (!exist) {
+    await db.addSong(song);
+    console.info('Add song to DB: ' + song.id);
+  }
+  db.increasePickCount(song.id);
+}
+
+async function getYoutubeSongInfo(url: string) {
+  return await ytdl.getInfo(url);
+}
+
 async function play(guild: Discord.Guild, song: Song) {
   const serverQueue = queueSet.get(guild.id);
-  // TODO: Yurika Random
+  
+  // Yurika Random
   if (!song) {
-    serverQueue.voiceChannel.leave();
-    queueSet.delete(guild.id);
-    return;
+    const randId = await db.getRandomSongID();
+    const randSong = await getYoutubeSongInfo('https://www.youtube.com/watch?v=' + randId);
+    song = new Song(
+      randSong.videoDetails.videoId,
+      randSong.videoDetails.title,
+      randSong.videoDetails.video_url,
+      randSong.videoDetails.ownerChannelName,
+      randSong.videoDetails.thumbnails.slice(-1)[0].url,
+      parseInt(randSong.videoDetails.lengthSeconds),
+    );
+    serverQueue.songs.push(song);
   }
 
-  console.log(`재생: ${song.title}`);
   const dispatcher = serverQueue.connection
     .play(await ytdl(song.url), { type: 'opus' })
     .on("finish", () => {
@@ -326,7 +352,18 @@ async function play(guild: Discord.Guild, song: Song) {
       serverQueue.songs.shift();
       play(guild, serverQueue.songs[0]);
     })
-    .on("error", error => console.error(error));
+    .on("error", error => {
+      serverQueue.textChannel.send('```cs\n'+
+      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+      `CODE: ${error.message}`+
+      '```');
+      console.error(error);
+    });
   dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
+
+  db.increasePlayCount(song.id);
+  db.fillEmptySongInfo(song.id, song.title);
+
+  console.log(`재생: ${song.title}`);
   serverQueue.textChannel.send(`🎶 \`재생: ${song.title}\``);
 }
