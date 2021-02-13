@@ -16,6 +16,7 @@ const client = new Discord.Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION']
 const queueSet = new Map<string, SongQueue>();  // song queue for each channel
 const searchResultMsgs = new Map<string, SearchResult>();
 const selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+const cancelEmoji = '❌';
 const db = new DJYurikaDB();
 
 // init
@@ -147,9 +148,16 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
   if (!searchResultMsgs.has(reaction.message.id)) return; // ignore reactions from other messages
   
   const selectedMsg = searchResultMsgs.get(reaction.message.id);
-  // requested only
+  // requested only, except developer or moderator
   if (user.id !== selectedMsg.reqUser.id && !(MyUtil.checkModeratorRole(reactedUser) || MyUtil.checkDeveloperRole(reactedUser))) return;
   
+  // cancel
+  if (reaction.emoji.name === cancelEmoji) {
+    reaction.message.delete();
+    searchResultMsgs.delete(reaction.message.id);
+    return;
+  }
+
   const selected = selectionEmojis.indexOf(reaction.emoji.name);
   const songid = selectedMsg.songIds[selected];
   
@@ -461,6 +469,7 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
   for (let index = 0; index < fields.length; index++) {
     msg.react(selectionEmojis[index]);
   }
+  msg.react(cancelEmoji);
 
 }
 
