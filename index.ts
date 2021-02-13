@@ -1,12 +1,18 @@
 import Discord from 'discord.js';
-import ytdl from 'ytdl-core';
+import ytdl from 'ytdl-core-discord';
+import ytdlc from 'ytdl-core';  // for using type declaration
+import consoleStamp from 'console-stamp';
+
 import { environment, keys } from './config';
 import { Song, SongQueue } from './types';
 import * as MyUtil from './util';
 
+consoleStamp(console, {
+  pattern: 'yyyy/mm/dd HH:MM:ss.l',
+});
+
 const client = new Discord.Client();
-// song queue for each channel
-const queueSet = new Map<string, SongQueue>();
+const queueSet = new Map<string, SongQueue>();  // song queue for each channel
 
 // init
 client.once('ready', () => {
@@ -100,7 +106,6 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
 
   // check sender is in voice channel
   const voiceChannel = message.member.voice.channel;
-  // console.log(voiceChannel);
   if (!voiceChannel) {
     return;
     // return message.channel.send(
@@ -116,16 +121,18 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     );
   }
 
+  // search text (this message will be removed after found)
   let id = (await message.channel.send(`🎵 \`검색 중: ${args[1]}\``)).id;
+  console.log(`검색 중: ${args[1]}`);
 
   // get song info
-  let songInfo: ytdl.videoInfo;
+  let songInfo: ytdlc.videoInfo;
   try {
     songInfo = await ytdl.getInfo(args[1]);
-    // songInfo.videoDetails.thumbnails.map(t => console.log(t));
   }
   catch (err) {
-    console.log(err);
+    const errMsg = err.toString().split('\n')[0];
+    console.log(errMsg);
     message.channel.messages.fetch(id).then(msg => msg.delete());
     message.channel.send("```cs\n"+
     "# 검색결과가 없습니다.\n"+
@@ -133,6 +140,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     return;
   }
 
+  // Make song instance
   const song = new Song(
     songInfo.videoDetails.videoId,
     songInfo.videoDetails.title,
@@ -141,29 +149,37 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     songInfo.videoDetails.thumbnails.slice(-1)[0].url,
     parseInt(songInfo.videoDetails.lengthSeconds),
     );
+  console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   if (!serverQueue || serverQueue.connection === null) {
     const queue = new SongQueue(message.channel, voiceChannel, null, [], 5, true);
     queueSet.set(message.guild.id, queue);
 
+    console.log("대기열 전송 중...");
     queue.songs.push(song);
 
     try {
+      // Voice connection
+      console.log('음성 채널 연결 중...');
+      message.channel.send(`🔗 \`연결: ${(message.channel as Discord.TextChannel).name}\``);
+      
       var connection = await voiceChannel.join();
       connection.on('disconnect', () => {
-        console.error('disconnected');
         onDisconnect(queue);
       });
       queue.connection = connection;
       play(message.guild, queue.songs[0]);
-    } catch (err) {
+    }
+    catch (err) {
       console.log(err);
       queueSet.delete(message.guild.id);
       return message.channel.send(err);
-    } finally {
+    }
+    finally {
       message.channel.messages.fetch(id).then(msg => msg.delete());
     }
   } else {
+    console.log("대기열 전송 중...");
     serverQueue.songs.push(song);
     message.channel.messages.fetch(id).then(msg => msg.delete());
     
@@ -203,6 +219,7 @@ function skip(message: Discord.Message, serverQueue: SongQueue) {
   if (!serverQueue)
     return message.channel.send("There is no song that I could skip!");
   
+  console.log(`건너 뜀: ${serverQueue.songs[0].title}`);
   message.channel.send(`⏭ \`건너뛰기: ${serverQueue.songs[0].title}\``);
   if (serverQueue.connection.dispatcher) {
     serverQueue.connection.dispatcher.end();
@@ -284,17 +301,15 @@ function stop(message: Discord.Message, serverQueue: SongQueue) {
 // --- internal
 
 function onDisconnect(serverQueue: SongQueue) {
-  // console.log(serverQueue);
-  // console.log(serverQueue.songs);
-
   if (serverQueue.connection.dispatcher) {
     serverQueue.connection.dispatcher.end();
   }
   serverQueue.songs = [];
   serverQueue.connection = null;
+  console.log('음성 채널 연결 종료됨');
 }
 
-function play(guild, song) {
+async function play(guild: Discord.Guild, song: Song) {
   const serverQueue = queueSet.get(guild.id);
   // TODO: Yurika Random
   if (!song) {
@@ -303,10 +318,11 @@ function play(guild, song) {
     return;
   }
 
+  console.log(`재생: ${song.title}`);
   const dispatcher = serverQueue.connection
-    .play(ytdl(song.url))
+    .play(await ytdl(song.url), { type: 'opus' })
     .on("finish", () => {
-      console.log('finish')
+      console.log(`재생 끝: ${song.title}`);
       serverQueue.songs.shift();
       play(guild, serverQueue.songs[0]);
     })

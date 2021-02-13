@@ -5,9 +5,6 @@ export class Song {
   channel: string;
   thumbnail: string;
   duration: number;
-  durationH: number;
-  durationM: number;
-  durationS: number;
 
   constructor(
     id?: string,
@@ -23,8 +20,17 @@ export class Song {
       this.channel = channel;
       this.thumbnail = thumbnail;
       this.duration = duration;
-      this.durationH = Math.trunc(duration / 3600);
-      this.durationM = Math.trunc((duration % 3600) / 60);
-      this.durationS = Math.trunc(duration % 60);
     }
+
+  get durationH() {
+    return Math.trunc(this.duration / 3600);
+  }
+
+  get durationM() {
+    return Math.trunc((this.duration % 3600) / 60);
+  }
+
+  get durationS() {
+    return Math.trunc(this.duration % 60);
+  }
 }
