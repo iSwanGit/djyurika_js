@@ -73,6 +73,18 @@ client.on('message', async message => {
       }
       break;
 
+    case 'd':
+      if (MyUtil.checkModeratorRole(message)) {
+        deleteSong(message, serverQueue);
+      }
+      break;
+
+    case 'm':
+      if (MyUtil.checkModeratorRole(message)) {
+        modifyOrder(message, serverQueue);
+      }
+      break;
+
     default:
       message.channel.send("사용법: `~h`");
       break;
@@ -297,6 +309,58 @@ function stop(message: Discord.Message, serverQueue: SongQueue) {
     }
   }
  
+}
+
+function deleteSong(message: Discord.Message, serverQueue: SongQueue) {
+  const args = message.content.split(' ');
+  if (args.length < 2) {
+    return message.channel.send('`~d <queue_index>`');
+  }
+  if (!serverQueue || serverQueue.songs.length === 0) {
+    return message.channel.send('대기열이 비었음');
+  }
+  if (args[1] === '1') {
+    return skip(message, serverQueue);    
+  }
+  const index = parseInt(args[1]);
+  if (isNaN(index) || index < 1 || index > serverQueue.songs.length) {
+    return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+  }
+
+  const removedSong = serverQueue.songs.splice(index-1, 1);
+  message.channel.send(`❎ \`재생목록 ${index}번째 삭제: ${removedSong[0].title}\``);
+}
+
+function modifyOrder(message: Discord.Message, serverQueue: SongQueue) {
+  const args = message.content.split(' ');
+  if (args.length < 3) {
+    return message.channel.send('`~m <target_index> <new_index>`');
+  }
+  if (!serverQueue || serverQueue.songs.length === 0) {
+    return message.channel.send('대기열이 비었음');
+  }
+  const targetIndex = parseInt(args[1]);
+  const newIndex = parseInt(args[2]);
+  console.log(targetIndex);
+  console.log(newIndex);
+  if (isNaN(targetIndex) || isNaN(newIndex)) {
+    return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+  }
+  if (targetIndex === 1 || newIndex === 1) {
+    return message.channel.send('앗 그건 좀... 맨 앞은 이미 재생중인데..');
+  }
+  if (targetIndex === newIndex) {
+    return message.channel.send('`Ignored: same index`');
+  }
+  const size = serverQueue.songs.length;
+  if (targetIndex < 1 || targetIndex > size || newIndex < 1 || newIndex > size) {
+    return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+  }
+
+  // shift order
+  const targetSong = serverQueue.songs.splice(targetIndex-1, 1)[0];
+  serverQueue.songs.splice(newIndex-1, 0, targetSong);
+  message.channel.send('✅ `순서 변경 완료`');
 }
 
 // --- internal

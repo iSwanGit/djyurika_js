@@ -9,3 +9,7 @@ export function fillZeroPad(num: number, width: number) {
 export function checkDeveloperRole(message: Message) {
   return message.member.roles.cache.find(role => role.id === environment.developerRoleID);
 }
+
+export function checkModeratorRole(message: Message) {
+  return message.member.roles.cache.find(role => role.id === environment.moderatorRoleID);
+}
