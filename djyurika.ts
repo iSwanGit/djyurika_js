@@ -4,7 +4,7 @@ import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
-import { Song, SongQueue } from './types';
+import { SearchResult, Song, SongQueue } from './types';
 import * as MyUtil from './util';
 import DJYurikaDB from './DJYurikaDB';
 
@@ -12,8 +12,10 @@ consoleStamp(console, {
   pattern: 'yyyy/mm/dd HH:MM:ss.l',
 });
 
-const client = new Discord.Client();
+const client = new Discord.Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION'] });
 const queueSet = new Map<string, SongQueue>();  // song queue for each channel
+const searchResultMsgs = new Map<string, SearchResult>();
+const selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const db = new DJYurikaDB();
 
 // init
@@ -36,11 +38,56 @@ client.on('message', async message => {
   // ignore messages from another channel
   if (message.channel.id !== environment.commandChannelID) return;
 
+  // check sender is in voice channel
+  const voiceChannel = message.member.voice.channel;
+  if (!voiceChannel) {
+    return;
+  }
+  // ignore messages if sender is not in proper voice channel
+  if (voiceChannel.id !== environment.voiceChannelID) {
+    // const allowedVoiceChannel = message.guild.channels.cache.get(environment.voiceChannelID);
+    return;
+  }
+
   const serverQueue = queueSet.get(message.guild.id);
 
   const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
 
   switch (cmd) {
+    case 't':
+      const keyword = message.content.split(' ').slice(1).join(' ');
+      // console.log(encodeURIComponent(keyword));
+      const res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
+
+      const searchResult = new SearchResult();
+      searchResult.songIds = [];
+
+      let fields = [];
+      // let description = '';
+  
+      res.items.map((item, index) => {
+        // description += `**${index+1}. [${item.snippet.title}](https://www.youtube.com/watch?v=${item.id.videoId})** (${item.snippet.channelTitle})\n\n`;
+        fields.push({ name: `${index+1}. ${item.snippet.title}`, value: `${item.snippet.channelTitle} ([see video](https://www.youtube.com/watch?v=${item.id.videoId}))` });
+        searchResult.songIds.push(item.id.videoId);
+      });
+      
+      const embedMessage = new Discord.MessageEmbed()
+        .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
+        .setTitle('Search result')
+        .setColor('#FFC0CB')
+        .addFields(fields);
+        // .setDescription(description);
+        
+      let msg = await message.channel.send(embedMessage);
+      searchResult.message = msg;
+
+      searchResultMsgs.set(msg.id, searchResult);
+
+      for (let index = 0; index < fields.length; index++) {
+        msg.react(selectionEmojis[index]);
+      }
+
+      break;
     case 'h':
       sendHelp(message);
       break;
@@ -66,7 +113,7 @@ client.on('message', async message => {
       break;
 
     case 'npid':
-      if (MyUtil.checkDeveloperRole(message)) {
+      if (MyUtil.checkDeveloperRole(message.member)) {
         if (serverQueue && serverQueue.songs.length > 0) {
           message.channel.send(`🎵 id: \`${serverQueue.songs[0].id}\``)
         }
@@ -74,13 +121,13 @@ client.on('message', async message => {
       break;
 
     case 'd':
-      if (MyUtil.checkModeratorRole(message)) {
+      if (MyUtil.checkModeratorRole(message.member)) {
         deleteSong(message, serverQueue);
       }
       break;
 
     case 'm':
-      if (MyUtil.checkModeratorRole(message)) {
+      if (MyUtil.checkModeratorRole(message.member)) {
         modifyOrder(message, serverQueue);
       }
       break;
@@ -90,7 +137,27 @@ client.on('message', async message => {
       break;
   }
 
-})
+});
+
+client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: Discord.User) => {
+  const serverQueue = queueSet.get(reaction.message.guild.id);
+  const reactedUser = reaction.message.guild.members.cache.get(user.id);
+  
+  if (user.id === client.user.id) return; // ignore self reaction
+  if (!searchResultMsgs.has(reaction.message.id)) return; // ignore reactions from other messages
+  
+  const selectedMsg = searchResultMsgs.get(reaction.message.id);
+  // requested only
+  if (user.id !== selectedMsg.reqUser.id && !(MyUtil.checkModeratorRole(reactedUser) || MyUtil.checkDeveloperRole(reactedUser))) return;
+  
+  const selected = selectionEmojis.indexOf(reaction.emoji.name);
+  const songid = selectedMsg.songIds[selected];
+  
+  const url = environment.youtubeUrlPrefix + songid;
+  playRequest(reaction.message, user, serverQueue, url, reaction.message.id);
+
+  searchResultMsgs.delete(reaction.message.id);
+});
 
 client.login(keys.botToken)
   .catch(err => { console.error(err) });
@@ -112,7 +179,7 @@ function sendHelp(message: Discord.Message) {
 }
 
 async function execute(message: Discord.Message, serverQueue: SongQueue) {
-  const args = message.content.split(" ");
+  const args = message.content.split(' ');
 
   if (args.length < 2) {
     return message.channel.send("`~p <song_link>` or `~p <exact_keyword>`");
@@ -135,93 +202,21 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     );
   }
 
-  // search text (this message will be removed after found)
-  let id = (await message.channel.send(`🎵 \`검색 중: ${args[1]}\``)).id;
-  console.log(`검색 중: ${args[1]}`);
+  const arg = message.content.split(' ').slice(1).join(' ');
+  // search (this message will be removed after found)
+  let id = (await message.channel.send(`🎵 \`검색 중: ${arg}\``)).id;
+  console.log(`검색 중: ${arg}`);
 
-  // get song info
-  let songInfo: ytdlc.videoInfo;
+  // determine link or keyword
+  let url: URL;
   try {
-    songInfo = await getYoutubeSongInfo(args[1]);
+    url = new URL(arg);
   }
-  catch (err) {
-    const errMsg = err.toString().split('\n')[0];
-    console.log(errMsg);
-    message.channel.messages.fetch(id).then(msg => msg.delete());
-    message.channel.send("```cs\n"+
-    "# 검색결과가 없습니다.\n"+
-    "```");
-    return;
-  }
+  catch (err) { }
 
-  // Make song instance
-  const song = new Song(
-    songInfo.videoDetails.videoId,
-    songInfo.videoDetails.title,
-    songInfo.videoDetails.video_url,
-    songInfo.videoDetails.ownerChannelName,
-    songInfo.videoDetails.thumbnails.slice(-1)[0].url,
-    parseInt(songInfo.videoDetails.lengthSeconds),
-    );
-  console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
+  if (url) { playRequest(message, message.client.user, serverQueue, args[1], id); }
+  else { keywordSearch(message, id); }
 
-  if (!serverQueue || serverQueue.connection === null) {
-    const queue = new SongQueue(message.channel, voiceChannel, null, [], 5, true);
-    queueSet.set(message.guild.id, queue);
-
-    addToPlaylist(song, queue);
-
-    try {
-      // Voice connection
-      console.log('음성 채널 연결 중...');
-      message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
-      
-      var connection = await voiceChannel.join();
-      connection.on('disconnect', () => {
-        onDisconnect(queue);
-      });
-      queue.connection = connection;
-      play(message.guild, queue.songs[0]);
-    }
-    catch (err) {
-      console.log(err);
-      queueSet.delete(message.guild.id);
-      return message.channel.send(`\`\`\`${err}\`\`\``);
-    }
-    finally {
-      message.channel.messages.fetch(id).then(msg => msg.delete());
-    }
-  } else {
-    addToPlaylist(song, serverQueue);
-
-    message.channel.messages.fetch(id).then(msg => msg.delete());
-    
-    const embedMessage = new Discord.MessageEmbed()
-    .setAuthor('재생목록 추가', message.guild.me.user.avatarURL(), song.url)
-    .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
-    .setColor('#0000ff')
-    .setDescription(`[${song.title}](${song.url})`)
-    .setThumbnail(song.thumbnail)
-    .addFields(
-      {
-        name: '채널',
-        value:  song.channel,
-        inline: true,
-      },
-      {
-        name:   '영상 시간',
-        value:  `${MyUtil.fillZeroPad(song.durationH, 2)}:${MyUtil.fillZeroPad(song.durationM, 2)}:${MyUtil.fillZeroPad(song.durationS, 2)}`,
-        inline: true,
-      },
-      {
-        name:   '대기열',
-        value:  serverQueue.songs.length,
-        inline: true,
-      },
-    );
-  
-    return message.channel.send(embedMessage);
-  }
 }
 
 function skip(message: Discord.Message, serverQueue: SongQueue) {
@@ -341,8 +336,6 @@ function modifyOrder(message: Discord.Message, serverQueue: SongQueue) {
   }
   const targetIndex = parseInt(args[1]);
   const newIndex = parseInt(args[2]);
-  console.log(targetIndex);
-  console.log(newIndex);
   if (isNaN(targetIndex) || isNaN(newIndex)) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
   }
@@ -432,4 +425,133 @@ async function play(guild: Discord.Guild, song: Song) {
   console.log(`재생: ${song.title}`);
   client.user.setActivity(song.title, { type: 'LISTENING' });
   serverQueue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+}
+
+async function keywordSearch(message: Discord.Message, msgId: string) {
+  const keyword = message.content.split(' ').slice(1).join(' ');
+  // console.log(encodeURIComponent(keyword));
+  const res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
+
+  const searchResult = new SearchResult();
+  searchResult.songIds = [];
+  searchResult.reqUser = message.author;
+
+  let fields = [];
+  // let description = '';
+
+  res.items.map((item, index) => {
+    // description += `**${index+1}. [${item.snippet.title}](https://www.youtube.com/watch?v=${item.id.videoId})** (${item.snippet.channelTitle})\n\n`;
+    fields.push({ name: `${index+1}. ${item.snippet.title}`, value: `${item.snippet.channelTitle} ([see video](https://www.youtube.com/watch?v=${item.id.videoId}))` });
+    searchResult.songIds.push(item.id.videoId);
+  });
+  
+  const embedMessage = new Discord.MessageEmbed()
+    .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
+    .setTitle('Search result')
+    .setColor('#FFC0CB')
+    .addFields(fields);
+    // .setDescription(description);
+  
+  message.channel.messages.fetch(msgId).then(msg => msg.delete());
+  let msg = await message.channel.send(embedMessage);
+  searchResult.message = msg;
+
+  searchResultMsgs.set(msg.id, searchResult);
+
+  for (let index = 0; index < fields.length; index++) {
+    msg.react(selectionEmojis[index]);
+  }
+
+}
+
+async function playRequest(message: Discord.Message, user: Discord.User, serverQueue: SongQueue, url: string, msgId: string) {
+  let voiceChannel = message.member.voice.channel;
+  // cannot get channel when message passed via reaction, so use below
+  if (!voiceChannel) {
+    voiceChannel = message.guild.members.cache.get(user.id).voice.channel;
+  }
+
+  // get song info
+  let songInfo: ytdlc.videoInfo;
+  try {
+    songInfo = await getYoutubeSongInfo(url);
+  }
+  catch (err) {
+    const errMsg = err.toString().split('\n')[0];
+    console.log(errMsg);
+    message.channel.messages.fetch(msgId).then(msg => msg.delete());
+    message.channel.send("```cs\n"+
+    "# 검색결과가 없습니다.\n"+
+    "```");
+    return;
+  }
+
+  // Make song instance
+  const song = new Song(
+    songInfo.videoDetails.videoId,
+    songInfo.videoDetails.title,
+    songInfo.videoDetails.video_url,
+    songInfo.videoDetails.ownerChannelName,
+    songInfo.videoDetails.thumbnails.slice(-1)[0].url,
+    parseInt(songInfo.videoDetails.lengthSeconds),
+    );
+  console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
+
+  if (!serverQueue || serverQueue.connection === null) {
+    const queue = new SongQueue(message.channel, voiceChannel, null, [], 5, true);
+    queueSet.set(message.guild.id, queue);
+
+    addToPlaylist(song, queue);
+
+    try {
+      // Voice connection
+      console.log('음성 채널 연결 중...');
+      message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
+      
+      var connection = await voiceChannel.join();
+      connection.on('disconnect', () => {
+        onDisconnect(queue);
+      });
+      queue.connection = connection;
+      play(message.guild, queue.songs[0]);
+    }
+    catch (err) {
+      console.log(err);
+      queueSet.delete(message.guild.id);
+      return message.channel.send(`\`\`\`${err}\`\`\``);
+    }
+    finally {
+      message.channel.messages.fetch(msgId).then(msg => msg.delete());
+    }
+  } else {
+    addToPlaylist(song, serverQueue);
+
+    message.channel.messages.fetch(msgId).then(msg => msg.delete());
+    
+    const embedMessage = new Discord.MessageEmbed()
+    .setAuthor('재생목록 추가', message.guild.me.user.avatarURL(), song.url)
+    .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
+    .setColor('#0000ff')
+    .setDescription(`[${song.title}](${song.url})`)
+    .setThumbnail(song.thumbnail)
+    .addFields(
+      {
+        name: '채널',
+        value:  song.channel,
+        inline: true,
+      },
+      {
+        name:   '영상 시간',
+        value:  `${MyUtil.fillZeroPad(song.durationH, 2)}:${MyUtil.fillZeroPad(song.durationM, 2)}:${MyUtil.fillZeroPad(song.durationS, 2)}`,
+        inline: true,
+      },
+      {
+        name:   '대기열',
+        value:  serverQueue.songs.length,
+        inline: true,
+      },
+    );
+  
+    return message.channel.send(embedMessage);
+  }
 }
