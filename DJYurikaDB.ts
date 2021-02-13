@@ -88,12 +88,11 @@ class DJYurikaDB {
       if (dbTitle.length) {
         conn.query('UPDATE playlist SET title = ? WHERE id = ?', [title, id])
           .then(() => conn.end());
+        console.info('Fill song title to DB column');
       }
       else {
         conn.end();
       }
-
-      console.info('Fill song title to DB column');
     }
     catch (err) { console.error(err); }
   }
