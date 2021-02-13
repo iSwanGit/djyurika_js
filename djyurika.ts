@@ -162,7 +162,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     try {
       // Voice connection
       console.log('음성 채널 연결 중...');
-      message.channel.send(`🔗 \`연결: ${(message.channel as Discord.TextChannel).name}\``);
+      message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
       
       var connection = await voiceChannel.join();
       connection.on('disconnect', () => {

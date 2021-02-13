@@ -85,7 +85,7 @@ class DJYurikaDB {
       const conn = await this.pool.getConnection();
 
       const dbTitle: string = (await conn.query('SELECT title FROM playlist WHERE id = ?', id))[0].title;
-      if (dbTitle.length) {
+      if (!dbTitle.length) {
         conn.query('UPDATE playlist SET title = ? WHERE id = ?', [title, id])
           .then(() => conn.end());
         console.info('Fill song title to DB column');

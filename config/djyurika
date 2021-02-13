@@ -12,7 +12,7 @@
 
 NAME="djyurika"
 PATH="/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
-APPDIR="/home/djyurika/js"
+APPDIR="/home/djyurika/djyurika_js"
 APPBIN="/usr/bin/node"
 LANG="ko_KR.UTF-8"
 
@@ -21,7 +21,7 @@ LANG="ko_KR.UTF-8"
 
 start() {
 	printf "Starting '$NAME'... "
-	start-stop-daemon --start --background --make-pidfile --pidfile /var/run/$NAME.pid --chdir "$APPDIR" --startas /bin/bash -- -c "exec $APPBIN $NAME.js > /home/djyurika/logs/$(date +%Y-%m-%dT%H_%M_%S).log 2>&1" || true
+	start-stop-daemon --start --background --make-pidfile --pidfile /var/run/$NAME.pid --chdir "$APPDIR/build" --startas /bin/bash -- -c "exec $APPBIN $NAME.js > /home/djyurika/logs/$(date +%Y-%m-%dT%H_%M_%S).log 2>&1" || true
 	printf "done\n"
 }
 
