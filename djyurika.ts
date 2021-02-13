@@ -343,6 +343,7 @@ async function play(guild: Discord.Guild, song: Song) {
       parseInt(randSong.videoDetails.lengthSeconds),
     );
     serverQueue.songs.push(song);
+    console.log(`랜덤 선곡: ${song.title} (${song.id})`);
   }
 
   const dispatcher = serverQueue.connection
