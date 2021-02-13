@@ -1,5 +1,5 @@
 import { Message } from 'discord.js';
-import { environment } from './config/environment';
+import { environment } from './config';
 
 export function fillZeroPad(num: number, width: number) {
   const n = num + '';

@@ -86,7 +86,7 @@ client.on('message', async message => {
       break;
 
     default:
-      message.channel.send("사용법: `~h`");
+      message.channel.send('사용법: `~h`');
       break;
   }
 
@@ -102,20 +102,20 @@ function sendHelp(message: Discord.Message) {
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor('사용법', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
     .setColor('#ffff00')
-    .setDescription("`~p 음악`: 유튜브에서 영상 재생\n\n" +
-    "`~q`: 대기열 정보\n\n" +
-    "`~np`: 현재 곡 정보\n\n" +
-    "`~s`: 건너뛰기\n\n" +
-    "`~l`: 채널에서 봇 퇴장\n\n");
+    .setDescription('`~p 음악`: 유튜브에서 영상 재생\n\n' +
+    '`~q`: 대기열 정보\n\n' +
+    '`~np`: 현재 곡 정보\n\n' +
+    '`~s`: 건너뛰기\n\n' +
+    '`~l`: 채널에서 봇 퇴장\n\n');
 
-  message.channel.send(embedMessage);
+  return message.channel.send(embedMessage);
 }
 
 async function execute(message: Discord.Message, serverQueue: SongQueue) {
-  const args = message.content.split(" ");
+  const args = message.content.split(' ');
 
   if (args.length < 2) {
-    return message.channel.send("`~p <song_link>` or `~p <exact_keyword>`");
+    return message.channel.send('`~p <song_link>` or `~p <exact_keyword>`');
   }
 
   // check sender is in voice channel
@@ -129,9 +129,9 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
 
   // check permission of voice channel
   const permissions = voiceChannel.permissionsFor(message.client.user);
-  if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
+  if (!permissions.has('CONNECT') || !permissions.has('SPEAK')) {
     return message.channel.send(
-      `Error: I need the permissions to join and speak in your voice channel!"`
+      `Error: I need the permissions to join and speak in your voice channel!`
     );
   }
 
@@ -148,9 +148,9 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     const errMsg = err.toString().split('\n')[0];
     console.log(errMsg);
     message.channel.messages.fetch(id).then(msg => msg.delete());
-    message.channel.send("```cs\n"+
-    "# 검색결과가 없습니다.\n"+
-    "```");
+    message.channel.send('```cs\n'+
+      '# 검색결과가 없습니다.\n'+
+      '```');
     return;
   }
 
@@ -162,7 +162,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     songInfo.videoDetails.ownerChannelName,
     songInfo.videoDetails.thumbnails.slice(-1)[0].url,
     parseInt(songInfo.videoDetails.lengthSeconds),
-    );
+  );
   console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   if (!serverQueue || serverQueue.connection === null) {
@@ -186,7 +186,8 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     catch (err) {
       console.log(err);
       queueSet.delete(message.guild.id);
-      return message.channel.send(`\`\`\`${err}\`\`\``);
+      return message.channel.send('```\n'+
+        `${err}` + '\n```');
     }
     finally {
       message.channel.messages.fetch(id).then(msg => msg.delete());
@@ -227,10 +228,10 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
 function skip(message: Discord.Message, serverQueue: SongQueue) {
   if (!message.member.voice.channel)
     return message.channel.send(
-      "You have to be in a voice channel to stop the music!"
+      'You have to be in a voice channel to stop the music!'
     );
   if (!serverQueue)
-    return message.channel.send("There is no song that I could skip!");
+    return message.channel.send('There is no song that I could skip!');
   
   console.log(`건너 뜀: ${serverQueue.songs[0].title}`);
   message.channel.send(`⏭ \`건너뛰기: ${serverQueue.songs[0].title}\``);
@@ -302,7 +303,7 @@ function stop(message: Discord.Message, serverQueue: SongQueue) {
   if (voiceState !== undefined) {
     try {
       voiceChannel.leave();
-      message.channel.send("👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!");
+      message.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
     }
     catch (err) {
       console.error(err);
@@ -341,8 +342,6 @@ function modifyOrder(message: Discord.Message, serverQueue: SongQueue) {
   }
   const targetIndex = parseInt(args[1]);
   const newIndex = parseInt(args[2]);
-  console.log(targetIndex);
-  console.log(newIndex);
   if (isNaN(targetIndex) || isNaN(newIndex)) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
   }
@@ -375,7 +374,7 @@ function onDisconnect(serverQueue: SongQueue) {
 }
 
 async function addToPlaylist(song: Song, queue: SongQueue) {
-  console.log("대기열 전송 중...");
+  console.log('대기열 전송 중...');
   queue.songs.push(song);
 
   // db check

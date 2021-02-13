@@ -40,7 +40,7 @@ class DJYurikaDB {
   public async addSong(song: Song) {
     try {
       const conn = await this.pool.getConnection();
-      conn.query(`INSERT INTO playlist (id, title, createdat) VALUES (?, ?, (SELECT NOW()))`, [song.id, song.title])
+      conn.query('INSERT INTO playlist (id, title, createdat) VALUES (?, ?, (SELECT NOW()))', [song.id, song.title])
         .then((res) => {console.info('Song added to DB: ' + song.id)})
         .catch(err => console.error(err))
         .finally(() => conn.end());
@@ -51,7 +51,7 @@ class DJYurikaDB {
   public async getRandomSongID(): Promise<string> {
     try {
       const conn = await this.pool.getConnection();
-      const idRow: string = (await conn.query(`SELECT id FROM playlist ORDER BY RAND() LIMIT 1`))[0].id;
+      const idRow: string = (await conn.query('SELECT id FROM playlist ORDER BY RAND() LIMIT 1'))[0].id;
       conn.end();
       return idRow;
     }
@@ -62,7 +62,7 @@ class DJYurikaDB {
     try {
       const conn = await this.pool.getConnection();
 
-      const count = (await conn.query(`SELECT playcount FROM playlist WHERE id = ?`, id))[0].playcount;
+      const count = (await conn.query('SELECT playcount FROM playlist WHERE id = ?', id))[0].playcount;
       conn.query('UPDATE playlist SET playcount = ?, lastplayedat = (SELECT NOW()) WHERE id = ?', [count+1, id])
         .then(() => conn.end());
     }
@@ -73,7 +73,7 @@ class DJYurikaDB {
     try {
       const conn = await this.pool.getConnection();
 
-      const count = (await conn.query(`SELECT pickcount FROM playlist WHERE id = ?`, id))[0].pickcount;
+      const count = (await conn.query('SELECT pickcount FROM playlist WHERE id = ?', id))[0].pickcount;
       conn.query('UPDATE playlist SET pickcount = ? WHERE id = ?', [count+1, id])
         .then(() => conn.end());
     }
