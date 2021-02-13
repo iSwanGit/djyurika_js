@@ -365,5 +365,6 @@ async function play(guild: Discord.Guild, song: Song) {
   db.fillEmptySongInfo(song.id, song.title);
 
   console.log(`재생: ${song.title}`);
+  client.user.setActivity(song.title, { type: 'LISTENING' });
   serverQueue.textChannel.send(`🎶 \`재생: ${song.title}\``);
 }
