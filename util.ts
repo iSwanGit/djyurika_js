@@ -20,6 +20,8 @@ export async function getYoutubeSearchList(keyword: string): Promise<YoutubeSear
   const apiUrl = `${environment.searchApiUrl}?key=${keys.youtubeApiKey}`
     + `&part=snippet&type=video&maxResults=5&videoEmbeddable=true`
     + `&q=${keyword}`;
-  const res: YoutubeSearch = JSON.parse(await request(apiUrl));
-  return res;
+  
+  const res = await request(apiUrl).catch((err) => {throw err.error});
+  const searchResult: YoutubeSearch = JSON.parse(res);
+  return searchResult;
 }

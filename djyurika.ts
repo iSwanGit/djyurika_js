@@ -4,7 +4,7 @@ import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
-import { SearchResult, Song, SongQueue } from './types';
+import { SearchError, SearchResult, Song, SongQueue, YoutubeSearch } from './types';
 import * as MyUtil from './util';
 import DJYurikaDB from './DJYurikaDB';
 
@@ -421,7 +421,7 @@ async function play(guild: Discord.Guild, song: Song) {
     .on("error", error => {
       serverQueue.textChannel.send('```cs\n'+
       '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-      `CODE: ${error.message}`+
+      `Error: ${error.message}`+
       '```');
       console.error(error);
     });
@@ -438,7 +438,19 @@ async function play(guild: Discord.Guild, song: Song) {
 async function keywordSearch(message: Discord.Message, msgId: string) {
   const keyword = message.content.split(' ').slice(1).join(' ');
   // console.log(encodeURIComponent(keyword));
-  const res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
+  let res: YoutubeSearch;
+  try {
+    res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
+  }
+  catch (err) {
+    const error = JSON.parse(err).error as SearchError;
+    console.error(error);
+    message.channel.send('```cs\n'+
+    '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+    `Error: ${error.code} - ${error.message}`+
+    '```');
+    return;
+  }
 
   const searchResult = new SearchResult();
   searchResult.songIds = [];

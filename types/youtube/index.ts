@@ -5,3 +5,4 @@ export * from './pageinfo';
 export * from './snippet';
 export * from './thumbnail';
 export * from './youtubesearch';
+export * from './searcherror';
