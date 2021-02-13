@@ -1,14 +1,12 @@
-import * as Discord from 'discord.js';
+import Discord from 'discord.js';
 import ytdl from 'ytdl-core';
 import { environment, keys } from './config';
-import { SongQueue } from './types';
-import * as Yurika from './function';
-import { getDefaultFormatCodeSettings } from 'typescript';
+import { Song, SongQueue } from './types';
 import * as MyUtil from './util';
 
 const client = new Discord.Client();
 // song queue for each channel
-const queue = new Map<string, SongQueue>();
+const queueSet = new Map<string, SongQueue>();
 
 // init
 client.once('ready', () => {
@@ -30,7 +28,7 @@ client.on('message', async message => {
   // ignore messages from another channel
   if (message.channel.id !== environment.commandChannelID) return;
 
-  const serverQueue = queue.get(message.guild.id);
+  const serverQueue = queueSet.get(message.guild.id);
 
   const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
 
@@ -102,6 +100,7 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
 
   // check sender is in voice channel
   const voiceChannel = message.member.voice.channel;
+  // console.log(voiceChannel);
   if (!voiceChannel) {
     return;
     // return message.channel.send(
@@ -134,39 +133,32 @@ async function execute(message: Discord.Message, serverQueue: SongQueue) {
     return;
   }
 
-  const song = {
-    id: songInfo.videoDetails.videoId,
-    title: songInfo.videoDetails.title,
-    url: songInfo.videoDetails.video_url,
-    channel: songInfo.videoDetails.ownerChannelName,
-    thumbnail: songInfo.videoDetails.thumbnails.slice(-1)[0].url,
-    duration: parseInt(songInfo.videoDetails.lengthSeconds),
-    durationH: Math.trunc(parseInt(songInfo.videoDetails.lengthSeconds) / 3600),
-    durationM: Math.trunc((parseInt(songInfo.videoDetails.lengthSeconds) % 3600) / 60),
-    durationS: Math.trunc(parseInt(songInfo.videoDetails.lengthSeconds) % 60)
-  };
+  const song = new Song(
+    songInfo.videoDetails.videoId,
+    songInfo.videoDetails.title,
+    songInfo.videoDetails.video_url,
+    songInfo.videoDetails.ownerChannelName,
+    songInfo.videoDetails.thumbnails.slice(-1)[0].url,
+    parseInt(songInfo.videoDetails.lengthSeconds),
+    );
 
   if (!serverQueue || serverQueue.connection === null) {
-    const queueContruct = {
-      textChannel: message.channel,
-      voiceChannel: voiceChannel,
-      connection: null,
-      songs: [],
-      volume: 5,
-      playing: true
-    };
+    const queue = new SongQueue(message.channel, voiceChannel, null, [], 5, true);
+    queueSet.set(message.guild.id, queue);
 
-    queue.set(message.guild.id, queueContruct);
-
-    queueContruct.songs.push(song);
+    queue.songs.push(song);
 
     try {
       var connection = await voiceChannel.join();
-      queueContruct.connection = connection;
-      play(message.guild, queueContruct.songs[0]);
+      connection.on('disconnect', () => {
+        console.error('disconnected');
+        onDisconnect(queue);
+      });
+      queue.connection = connection;
+      play(message.guild, queue.songs[0]);
     } catch (err) {
       console.log(err);
-      queue.delete(message.guild.id);
+      queueSet.delete(message.guild.id);
       return message.channel.send(err);
     } finally {
       message.channel.messages.fetch(id).then(msg => msg.delete());
@@ -218,7 +210,7 @@ function skip(message: Discord.Message, serverQueue: SongQueue) {
 }
 
 function nowPlaying(message: Discord.Message, serverQueue: SongQueue) {
-  if (!serverQueue || serverQueue.songs.length === 0) {
+  if (!serverQueue || serverQueue.songs.length === 0 || !serverQueue.playing) {
     return;
   }
 
@@ -272,34 +264,49 @@ function stop(message: Discord.Message, serverQueue: SongQueue) {
     return;
     // return message.channel.send("There is no song that I could stop!");
   }
-  serverQueue.songs = [];
-  if (serverQueue.connection.dispatcher) {
-    serverQueue.connection.dispatcher.end();
-  }
+  // serverQueue.songs = [];
+  // if (serverQueue.connection.dispatcher) {
+  //   serverQueue.connection.dispatcher.end();
+  // }
+  //// onDisconnect callback will do this
   if (voiceState !== undefined) {
     try {
       voiceChannel.leave();
+      message.channel.send("👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!");
     }
-    catch (err) {}
-    message.channel.send("👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!");
+    catch (err) {
+      console.log(err);
+    }
   }
  
 }
 
 // --- internal
 
+function onDisconnect(serverQueue: SongQueue) {
+  // console.log(serverQueue);
+  // console.log(serverQueue.songs);
+
+  if (serverQueue.connection.dispatcher) {
+    serverQueue.connection.dispatcher.end();
+  }
+  serverQueue.songs = [];
+  serverQueue.connection = null;
+}
+
 function play(guild, song) {
-  const serverQueue = queue.get(guild.id);
+  const serverQueue = queueSet.get(guild.id);
   // TODO: Yurika Random
   if (!song) {
     serverQueue.voiceChannel.leave();
-    queue.delete(guild.id);
+    queueSet.delete(guild.id);
     return;
   }
 
   const dispatcher = serverQueue.connection
     .play(ytdl(song.url))
     .on("finish", () => {
+      console.log('finish')
       serverQueue.songs.shift();
       play(guild, serverQueue.songs[0]);
     })
