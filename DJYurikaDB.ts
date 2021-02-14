@@ -41,7 +41,7 @@ class DJYurikaDB {
     try {
       const conn = await this.pool.getConnection();
       conn.query('INSERT INTO playlist (id, title, createdat) VALUES (?, ?, (SELECT NOW()))', [song.id, song.title])
-        .then((res) => {console.info('Song added to DB: ' + song.id)})
+        .then(async () => await this.increasePickCount(song.id))
         .catch(err => console.error(err))
         .finally(() => conn.end());
     }
