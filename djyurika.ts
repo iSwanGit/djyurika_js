@@ -1,4 +1,4 @@
-import Discord from 'discord.js';
+import Discord, { DMChannel, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -17,11 +17,16 @@ const db = new DJYurikaDB();
 
 const selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const cancelEmoji = '❌';
+const acceptEmoji = '⭕';
+const denyEmoji = '❌';
+
 const searchResultMsgs = new Map<string, SearchResult>(); // string: message id
-const moveVoteList = new Map<string, MoveRequest>();  // string: message id
+const moveRequestList = new Map<string, MoveRequest>();  // string: message id
 
 var queue: SongQueue;
 let joinedVoiceConnection: Discord.VoiceConnection;
+
+process.setMaxListeners(0); // release limit (for voicestatechange event handler)
 
 // init
 client.once('ready', () => {
@@ -99,7 +104,7 @@ client.on('message', async message => {
       break;
 
     case 'move':
-      message.channel.send('Work in progress');
+      requestMove(message);
       break;
 
     default:
@@ -109,45 +114,136 @@ client.on('message', async message => {
 
 });
 
-client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: Discord.User) => {
-  const reactedUser = reaction.message.guild.members.cache.get(user.id);
-  
+client.on('messageReactionRemove', async (reaction: Discord.MessageReaction, user: Discord.User) => {
+  var selectedMsg: SearchResult | MoveRequest;
+
   if (user.id === client.user.id) return; // ignore self reaction
-  if (!searchResultMsgs.has(reaction.message.id)) return; // ignore reactions from other messages
-  
-  const selectedMsg = searchResultMsgs.get(reaction.message.id);
-  //  except developer or moderator
-  if (!(MyUtil.checkDeveloperRole(reactedUser) || MyUtil.checkModeratorRole(reactedUser))) {
-    const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
-    const allowedVoiceChannel = reaction.message.guild.channels.cache.get(environment.voiceChannelID);
-    // requested user only
-    if (user.id !== selectedMsg.reqUser.id) return;
-    // check requested user is in voice channel
-    if (!voiceChannel) {
-      reaction.message.reply(`<@${user.id}> \`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
-      return;
-    }
-    // ignore messages if sender is not in proper voice channel 
-    else if (voiceChannel.id !== environment.voiceChannelID) {
-      reaction.message.reply(`<@${user.id}> \`${voiceChannel.name}\` 말고 \`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
-      return;
+  if (!searchResultMsgs.has(reaction.message.id) && !moveRequestList.has(reaction.message.id)) return; // ignore reactions from other messages  
+
+  // vote re-calculate
+  selectedMsg = moveRequestList.get(reaction.message.id);
+  if (selectedMsg) {
+    if (reaction.emoji.name === acceptEmoji) {
+      // undo vote
+      console.log('triggered');
+      const index = selectedMsg.acceptedMemberIds.indexOf(user.id);
+      console.log(index);
+      if (index !== undefined) {
+        selectedMsg.acceptedMemberIds.splice(index, 1);
+      }
     }
   }
+});
 
-  // cancel
-  if (reaction.emoji.name === cancelEmoji) {
-    reaction.message.delete();
+client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: Discord.User) => {
+  const reactedUser = reaction.message.guild.members.cache.get(user.id);
+  var selectedMsg: SearchResult | MoveRequest;
+
+  if (user.id === client.user.id) return; // ignore self reaction
+  if (!searchResultMsgs.has(reaction.message.id) && !moveRequestList.has(reaction.message.id)) return; // ignore reactions from other messages
+
+  selectedMsg = searchResultMsgs.get(reaction.message.id);
+  if (selectedMsg) {
+    // music select
+
+    //  except developer or moderator
+    if (!(MyUtil.checkDeveloperRole(reactedUser) || MyUtil.checkModeratorRole(reactedUser))) {
+      const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
+      // requested user only
+      if (user.id !== selectedMsg.reqUser.id) return;
+      // check requested user is in voice channel
+      if (!voiceChannel) {
+        reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
+        return;
+      }
+    }
+  
+    // cancel
+    if (reaction.emoji.name === cancelEmoji) {
+      reaction.message.delete();
+      searchResultMsgs.delete(reaction.message.id);
+      return;
+    }
+  
+    const selected = selectionEmojis.indexOf(reaction.emoji.name);
+    const songid = selectedMsg.songIds[selected];
+    
+    const url = environment.youtubeUrlPrefix + songid;
+    playRequest(reaction.message, user, url, reaction.message.id);
+  
     searchResultMsgs.delete(reaction.message.id);
     return;
   }
 
-  const selected = selectionEmojis.indexOf(reaction.emoji.name);
-  const songid = selectedMsg.songIds[selected];
-  
-  const url = environment.youtubeUrlPrefix + songid;
-  playRequest(reaction.message, user, url, reaction.message.id);
+  selectedMsg = moveRequestList.get(reaction.message.id);
+  if (selectedMsg) {
+    // channel move vote
+    
+    // self vote - ok: nothing, deny: cancel
+    if (reactedUser.id === selectedMsg.reqUser.id) {
+      if (reaction.emoji.name === denyEmoji) {
+        // cancel
+        reaction.message.channel.send('⚠ `요청 취소됨`');
+        reaction.message.delete();
+        moveRequestList.delete(reaction.message.id);
+      }
+      return;
+    }
 
-  searchResultMsgs.delete(reaction.message.id);
+    // vote
+    const currentJoinedUsers = joinedVoiceConnection.channel.members;
+    if (reaction.emoji.name === acceptEmoji) {
+      if (!selectedMsg.acceptedMemberIds.includes(user.id)) {
+        selectedMsg.acceptedMemberIds.push(user.id);
+      }
+
+      // current count
+      const acceptedVotes = selectedMsg.acceptedMemberIds;
+      const minimumAcceptCount = Math.trunc((currentJoinedUsers.size-1) / 2) + 1;  // except bot
+      let acceptedVoiceMemberCount = 0;
+      currentJoinedUsers.forEach(user => {
+        if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
+      });
+      
+      // 과반수, ok
+      if (acceptedVoiceMemberCount >= minimumAcceptCount) {
+        // send message
+        reaction.message.channel.send('🔊 과반수의 동의로 음성채널을 이동합니다');
+        // channel move
+        moveVoiceChannel(reaction.message, reaction.message.channel, selectedMsg.targetChannel);
+      }
+    }
+    return;
+  }
+  
+  // nothing of both
+  else return;
+});
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  // console.log(oldState);
+  // console.log(newState);
+  
+  if (!joinedVoiceConnection) return;
+  
+  // vote re-calculate
+  const currentJoinedUsers = joinedVoiceConnection.channel.members;
+  // current count
+  moveRequestList.forEach(req => {
+    const acceptedVotes = req.acceptedMemberIds;
+    const minimumAcceptCount = Math.trunc((currentJoinedUsers.size-1) / 2) + 1;  // except bot
+    let acceptedVoiceMemberCount = 0;
+    currentJoinedUsers.forEach(user => {
+      if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
+    });
+    // 과반수, ok
+    if (acceptedVoiceMemberCount >= minimumAcceptCount) {
+      // send message
+      req.message.channel.send('🔊 인원수 변동, 과반수의 동의로 음성채널을 이동합니다');
+      // channel move
+      moveVoiceChannel(req.message, req.message.channel, req.targetChannel);
+    }
+  });
 });
 
 client.login(keys.botToken)
@@ -160,11 +256,22 @@ function sendHelp(message: Discord.Message) {
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor('사용법', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
     .setColor('#ffff00')
-    .setDescription('`~p 음악`: 유튜브에서 영상 재생\n\n' +
-    '`~q`: 대기열 정보\n\n' +
-    '`~np`: 현재 곡 정보\n\n' +
-    '`~s`: 건너뛰기\n\n' +
-    '`~l`: 채널에서 봇 퇴장\n\n');
+    .addFields(
+      {
+        name: 'Version 2 새 기능',
+        value: '1. 특정 음성채널로 소환\n' +
+        '2. 키워드 검색\n'
+      },
+      {
+        name: '명령어',
+        value: '`~p 음악`: 유튜브에서 영상 재생\n' +
+        '`~q`: 대기열 정보\n' +
+        '`~np`: 현재 곡 정보\n' +
+        '`~s`: 건너뛰기\n' +
+        '`~l`: 채널에서 봇 퇴장\n' + 
+        '`~move`: 음성 채널 이동 요청\n'
+      },
+    );
 
   return message.channel.send(embedMessage);
 }
@@ -185,7 +292,9 @@ async function execute(message: Discord.Message) {
   // check permission of voice channel
   const permissions = voiceChannel.permissionsFor(message.client.user);
   if (!joinedVoiceConnection && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
-    return message.channel.send('Error: 요청 음성채널 권한 없음');
+    return message.channel.send('```cs\n'+
+    '# Error: 요청 음성채널 권한 없음\n'+
+    '```');
   }
 
   const arg = message.content.split(' ').slice(1).join(' ');
@@ -234,6 +343,11 @@ function nowPlaying(message: Discord.Message) {
     .setThumbnail(song.thumbnail)
     .addFields(
       {
+        name: '현재 음성채널',
+        value:  joinedVoiceConnection.channel.name,
+        inline: false,
+      },
+      {
         name: '채널',
         value:  song.channel,
         inline: true,
@@ -265,7 +379,7 @@ function getQueue(message: Discord.Message) {
     .setColor('#FFC0CB')
     .addFields(
       {
-        name: '재생 채널: ' + joinedVoiceConnection.channel.name,
+        name: '현재 음성채널: ' + joinedVoiceConnection.channel.name,
         value: queueData,
       },
     );
@@ -345,6 +459,64 @@ function modifyOrder(message: Discord.Message) {
   const targetSong = queue.songs.splice(targetIndex-1, 1)[0];
   queue.songs.splice(newIndex-1, 0, targetSong);
   message.channel.send('✅ `순서 변경 완료`');
+}
+
+async function requestMove(message: Discord.Message) {
+  // check DJ Yurika joined voice channel
+  if (!joinedVoiceConnection || !queue || queue.songs.length === 0 || !queue.playing) {
+    return;
+  }
+
+  // check sender joined voice channel
+  const userVoiceChannel = message.member.voice.channel;
+  if (!userVoiceChannel) {
+    // return message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
+    return;
+  }
+
+  // check djyurika and user are in same voice channel
+  if (joinedVoiceConnection.channel.id === userVoiceChannel.id) {
+    return;
+  }
+
+  // move if no one in current voice channel
+  if (joinedVoiceConnection.channel.members.size === 1) {
+    moveVoiceChannel(null, message.channel, userVoiceChannel);
+    return;
+  }
+
+  const embedMessage = new Discord.MessageEmbed()
+  .setAuthor('음성채널 이동 요청', message.author.avatarURL())
+  .setColor('#39c5bb')
+  .setDescription(`Requested by <@${message.member.id}>`)
+  .addFields(
+    {
+      name: '현재 채널',
+      value:  joinedVoiceConnection.channel.name,
+      inline: true,
+    },
+    {
+      name: '요청 채널',
+      value: userVoiceChannel.name,
+      inline: true,
+    },
+    {
+      name: '안내',
+      value: '현재 채널의 과반수가 동의해야 합니다.',
+      inline: false,
+    },
+  );  
+
+  let msg = await message.channel.send(embedMessage);
+  msg.react(acceptEmoji);
+  msg.react(denyEmoji);
+
+  const req = new MoveRequest();
+  req.message = msg;
+  req.reqUser = message.member;
+  req.targetChannel = userVoiceChannel;
+
+  moveRequestList.set(msg.id, req);
 }
 
 // --- internal
@@ -530,13 +702,17 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       connection.on('disconnect', () => {
         onDisconnect();
       });
+      console.info('연결 됨: ' + voiceChannel.name);
       joinedVoiceConnection = connection;
       play(message.guild, queue.songs[0]);
     }
     catch (err) {
       console.log(err);
       queue = null;
-      return message.channel.send(`\`\`\`${err}\`\`\``);
+      return message.channel.send('```cs\n'+
+      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+      `${err}`+
+      '```');
     }
     finally {
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
@@ -576,9 +752,37 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     );
   
     message.channel.send(embedMessage);
-    if (message.guild.members.cache.get(user.id).voice.channel.id !== joinedVoiceConnection.channel.id) {
+    if (joinedVoiceConnection.channel.members.size === 1) { // no one
+      moveVoiceChannel(null, message.channel, message.guild.members.cache.get(user.id).voice.channel);
+    }
+    else if (message.guild.members.cache.get(user.id).voice.channel.id !== joinedVoiceConnection.channel.id) {
       message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
     }
     return;
+  }
+}
+
+async function moveVoiceChannel(message: Discord.Message, commandChannel: TextChannel | DMChannel | NewsChannel, voiceChannel: Discord.VoiceChannel) {
+  try {
+    console.log('음성 채널 이동 중...');
+    commandChannel.send(`🔗 \`연결: ${voiceChannel.name}\``);
+    var connection = await voiceChannel.join();
+    connection.on('disconnect', () => {
+      onDisconnect();
+    });
+    console.info('연결 됨: ' + voiceChannel.name);
+    joinedVoiceConnection = connection;
+    // delete message
+    if (message) {
+      moveRequestList.delete(message.id);
+      message.delete();  
+    }
+  }
+  catch (err) {
+    console.error(err.message);
+    return commandChannel.send('```cs\n'+
+    '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+    `${err.message}`+
+    '```');
   }
 }
