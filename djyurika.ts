@@ -1,4 +1,4 @@
-import Discord, { DMChannel, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DMChannel, Message, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -101,6 +101,12 @@ client.on('message', async message => {
     case 'm':
       if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
         modifyOrder(message);
+      }
+      break;
+
+    case 'c':
+      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+        clearQueue(message);
       }
       break;
 
@@ -638,6 +644,13 @@ async function requestMove(message: Discord.Message) {
   req.targetChannel = userVoiceChannel;
 
   moveRequestList.set(msg.id, req);
+}
+
+function clearQueue(message: Message) {
+  if (!queue || queue.songs.length < 2) return;
+
+  queue.songs.length = 1;
+  message.channel.send('❎ `모든 대기열 삭제 완료`');
 }
 
 // --- internal
