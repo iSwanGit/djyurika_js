@@ -59,40 +59,6 @@ client.on('message', async message => {
   const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
 
   switch (cmd) {
-    case 't':
-      const keyword = message.content.split(' ').slice(1).join(' ');
-      // console.log(encodeURIComponent(keyword));
-      const res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
-
-      const searchResult = new SearchResult();
-      searchResult.songIds = [];
-
-      let fields = [];
-      // let description = '';
-  
-      res.items.map((item, index) => {
-        // description += `**${index+1}. [${item.snippet.title}](https://www.youtube.com/watch?v=${item.id.videoId})** (${item.snippet.channelTitle})\n\n`;
-        fields.push({ name: `${index+1}. ${item.snippet.title}`, value: `${item.snippet.channelTitle} ([see video](https://www.youtube.com/watch?v=${item.id.videoId}))` });
-        searchResult.songIds.push(item.id.videoId);
-      });
-      
-      const embedMessage = new Discord.MessageEmbed()
-        .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
-        .setTitle('Search result')
-        .setColor('#FFC0CB')
-        .addFields(fields);
-        // .setDescription(description);
-        
-      let msg = await message.channel.send(embedMessage);
-      searchResult.message = msg;
-
-      searchResultMsgs.set(msg.id, searchResult);
-
-      for (let index = 0; index < fields.length; index++) {
-        msg.react(selectionEmojis[index]);
-      }
-
-      break;
     case 'h':
       sendHelp(message);
       break;

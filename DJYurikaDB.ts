@@ -1,6 +1,6 @@
-import { Connection, createPool, Pool } from 'mariadb';
+import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
-import { DBSong, Song } from './types';
+import { Song } from './types';
 
 class DJYurikaDB {
   private pool: Pool;
