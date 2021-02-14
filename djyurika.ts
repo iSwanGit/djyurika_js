@@ -199,7 +199,7 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
 
       // current count
       const acceptedVotes = selectedMsg.acceptedMemberIds;
-      const minimumAcceptCount = Math.trunc((currentJoinedUsers.size-1) / 2) + 1;  // except bot
+      const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
       let acceptedVoiceMemberCount = 0;
       currentJoinedUsers.forEach(user => {
         if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
@@ -231,7 +231,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   // current count
   moveRequestList.forEach(req => {
     const acceptedVotes = req.acceptedMemberIds;
-    const minimumAcceptCount = Math.trunc((currentJoinedUsers.size-1) / 2) + 1;  // except bot
+    const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
     let acceptedVoiceMemberCount = 0;
     currentJoinedUsers.forEach(user => {
       if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
