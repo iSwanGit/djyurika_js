@@ -4,3 +4,4 @@ export * from './SongQueue';
 export * from './SearchResult';
 export * from './youtube';
 export * from './MoveRequest';
+export * from './LeaveRequest';
