@@ -691,28 +691,36 @@ async function play(guild: Discord.Guild, song: Song) {
     console.log(`랜덤 선곡: ${song.title} (${song.id})`);
   }
 
-  const dispatcher = joinedVoiceConnection
-    .play(await ytdl(song.url), { type: 'opus' })
-    .on("finish", () => {
-      console.log(`재생 끝: ${song.title}`);
-      queue.songs.shift();
-      play(guild, queue.songs[0]);
-    })
-    .on("error", error => {
-      queue.textChannel.send('```cs\n'+
-      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-      `Error: ${error.message}`+
-      '```');
-      console.error(error);
-    });
-  dispatcher.setVolumeLogarithmic(queue.volume / 5);
+  try {
+    const dispatcher = joinedVoiceConnection
+      .play(await ytdl(song.url), { type: 'opus' })
+      .on("finish", () => {
+        console.log(`재생 끝: ${song.title}`);
+        queue.songs.shift();
+        play(guild, queue.songs[0]);
+      })
+      .on("error", error => {
+        queue.textChannel.send('```cs\n'+
+        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+        `Error: ${error.message}`+
+        '```');
+        console.error(error);
+      });
+    dispatcher.setVolumeLogarithmic(queue.volume / 5);
 
-  db.increasePlayCount(song.id);
-  db.fillEmptySongInfo(song.id, song.title);
-
-  console.log(`재생: ${song.title}`);
-  client.user.setActivity(song.title, { type: 'LISTENING' });
-  queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+    db.increasePlayCount(song.id);
+    db.fillEmptySongInfo(song.id, song.title);
+  
+    console.log(`재생: ${song.title}`);
+    client.user.setActivity(song.title, { type: 'LISTENING' });
+    queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+  }
+  catch (err) {
+    console.error(err);
+    queue.textChannel.send('```' + err + '```');
+    // 이 catch 블록 통과후 노래가 멈추면 try 안의 on finish 콜백 내용을 복붙할것
+  }
+  
 }
 
 async function selectRandomSong(): Promise<Song> {
