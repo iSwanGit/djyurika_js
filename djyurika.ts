@@ -93,13 +93,13 @@ client.on('message', async message => {
       break;
 
     case 'd':
-      if (MyUtil.checkModeratorRole(message.member)) {
+      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
         deleteSong(message);
       }
       break;
 
     case 'm':
-      if (MyUtil.checkModeratorRole(message.member)) {
+      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
         modifyOrder(message);
       }
       break;
@@ -597,7 +597,7 @@ async function requestMove(message: Discord.Message) {
   }
 
   // move if no one in current voice channel
-  if (joinedVoiceConnection.channel.members.size === 1) {
+  if (joinedVoiceConnection.channel.members.size === 1 || MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
     moveVoiceChannel(null, message.channel, userVoiceChannel);
     return;
   }
