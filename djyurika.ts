@@ -397,16 +397,7 @@ async function play(guild: Discord.Guild, song: Song) {
   
   // Yurika Random
   if (!song) {
-    const randId = await db.getRandomSongID();
-    const randSong = await getYoutubeSongInfo('https://www.youtube.com/watch?v=' + randId);
-    song = new Song(
-      randSong.videoDetails.videoId,
-      randSong.videoDetails.title,
-      randSong.videoDetails.video_url,
-      randSong.videoDetails.ownerChannelName,
-      randSong.videoDetails.thumbnails.slice(-1)[0].url,
-      parseInt(randSong.videoDetails.lengthSeconds),
-    );
+    song = await selectRandomSong();
     serverQueue.songs.push(song);
     console.log(`랜덤 선곡: ${song.title} (${song.id})`);
   }
@@ -433,6 +424,30 @@ async function play(guild: Discord.Guild, song: Song) {
   console.log(`재생: ${song.title}`);
   client.user.setActivity(song.title, { type: 'LISTENING' });
   serverQueue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+}
+
+async function selectRandomSong(): Promise<Song> {
+  const randId = await db.getRandomSongID();
+  try {
+    const randSong = await getYoutubeSongInfo('https://www.youtube.com/watch?v=' + randId);
+    const song = new Song(
+      randSong.videoDetails.videoId,
+      randSong.videoDetails.title,
+      randSong.videoDetails.video_url,
+      randSong.videoDetails.ownerChannelName,
+      randSong.videoDetails.thumbnails.slice(-1)[0].url,
+      parseInt(randSong.videoDetails.lengthSeconds),
+    );
+
+    return song;
+  }
+  catch (err) {
+    const errMsg = err.toString().split('\n')[0];
+    console.error(errMsg);
+    console.error('Song id is: ' + randId);
+    console.log('Get another random pick');
+    return selectRandomSong();
+  }
 }
 
 async function keywordSearch(message: Discord.Message, msgId: string) {
@@ -499,7 +514,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, serverQ
   }
   catch (err) {
     const errMsg = err.toString().split('\n')[0];
-    console.log(errMsg);
+    console.error(errMsg);
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
     message.channel.send("```cs\n"+
     "# 검색결과가 없습니다.\n"+
