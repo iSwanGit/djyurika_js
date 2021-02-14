@@ -559,6 +559,19 @@ async function requestStop(message: Discord.Message) {
     return stop(message, null);
   }
 
+  // 요청한 사람 수가 지금 요청까지 해서 과반수 도달할때, do stop
+  const currentJoinedUsers = joinedVoiceConnection.channel.members;
+  const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
+  let acceptedVoiceMemberCount = 0;
+  leaveRequestList.forEach((req, msgId) => {
+    if (req.voiceChannel.id === joinedVoiceConnection.channel.id) {
+      acceptedVoiceMemberCount++;
+    }
+  })
+  if (acceptedVoiceMemberCount + 1 >= minimumAcceptCount) {
+    return stop(message, null);
+  }
+
   // request vote
   const embedMessage = new Discord.MessageEmbed()
   .setAuthor('중지 요청', message.author.avatarURL())  
