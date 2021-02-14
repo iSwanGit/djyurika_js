@@ -39,15 +39,19 @@ client.on('message', async message => {
   // ignore messages from another channel
   if (message.channel.id !== environment.commandChannelID) return;
 
-  // check sender is in voice channel
+  // check sender is in voice channel (except moderator and developer)
   const voiceChannel = message.member.voice.channel;
-  if (!voiceChannel) {
-    return;
-  }
-  // ignore messages if sender is not in proper voice channel
-  if (voiceChannel.id !== environment.voiceChannelID) {
-    // const allowedVoiceChannel = message.guild.channels.cache.get(environment.voiceChannelID);
-    return;
+  const allowedVoiceChannel = message.guild.channels.cache.get(environment.voiceChannelID);
+  if (!(MyUtil.checkDeveloperRole(message.member) || MyUtil.checkModeratorRole(message.member))) {
+    if (!voiceChannel) {
+      message.reply(`\`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
+      return;
+    }
+    // ignore messages if sender is not in proper voice channel 
+    else if (voiceChannel.id !== environment.voiceChannelID) {
+      message.reply(`\`${voiceChannel.name}\` 말고 \`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
+      return;
+    }
   }
 
   const serverQueue = queueSet.get(message.guild.id);
@@ -148,9 +152,24 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
   if (!searchResultMsgs.has(reaction.message.id)) return; // ignore reactions from other messages
   
   const selectedMsg = searchResultMsgs.get(reaction.message.id);
-  // requested only, except developer or moderator
-  if (user.id !== selectedMsg.reqUser.id && !(MyUtil.checkModeratorRole(reactedUser) || MyUtil.checkDeveloperRole(reactedUser))) return;
-  
+  //  except developer or moderator
+  if (!(MyUtil.checkDeveloperRole(reactedUser) || MyUtil.checkModeratorRole(reactedUser))) {
+    const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
+    const allowedVoiceChannel = reaction.message.guild.channels.cache.get(environment.voiceChannelID);
+    // requested user only
+    if (user.id !== selectedMsg.reqUser.id) return;
+    // check requested user is in voice channel
+    if (!voiceChannel) {
+      reaction.message.reply(`<@${user.id}> \`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
+      return;
+    }
+    // ignore messages if sender is not in proper voice channel 
+    else if (voiceChannel.id !== environment.voiceChannelID) {
+      reaction.message.reply(`<@${user.id}> \`${voiceChannel.name}\` 말고 \`${allowedVoiceChannel.name}\`로 들어와서 다시 요청해 주세요.`);
+      return;
+    }
+  }
+
   // cancel
   if (reaction.emoji.name === cancelEmoji) {
     reaction.message.delete();
