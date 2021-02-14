@@ -544,6 +544,10 @@ async function requestStop(message: Discord.Message) {
   if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
     return stop(message, null);
   }
+  // ignore if user is not in my voice channel
+  if (message.member.voice.channel.id !== voiceChannel.id) {
+    return;
+  }
   // if there are only bot or, bot and user, do stop. 3포함은 과반수때문에 어차피 걸림
   if (voiceChannel.members.size <= 3) {
     return stop(message, null);
