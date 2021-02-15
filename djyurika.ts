@@ -827,9 +827,9 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
     .setTitle('Search result')
+    .setDescription(`Requested by <@${message.member.id}>`)
     .setColor('#FFC0CB')
     .addFields(fields);
-    // .setDescription(description);
   
   message.channel.messages.fetch(msgId).then(msg => msg.delete());
   let msg = await message.channel.send(embedMessage);
