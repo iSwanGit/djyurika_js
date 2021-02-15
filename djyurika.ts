@@ -1,4 +1,4 @@
-import Discord, { DMChannel, Message, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DiscordAPIError, DMChannel, Message, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -624,8 +624,16 @@ async function requestStop(message: Discord.Message) {
   );  
 
   let msg = await message.channel.send(embedMessage);
-  msg.react(acceptEmoji);
-  msg.react(denyEmoji);
+  try {
+    msg.react(acceptEmoji);
+    msg.react(denyEmoji);
+  }
+  catch (err) {
+    const error = err as DiscordAPIError;
+    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    console.error('Message may be deleted already');
+  }
+  
 
   const req = new LeaveRequest();
   req.message = msg;
@@ -682,8 +690,15 @@ async function requestMove(message: Discord.Message) {
   );  
 
   let msg = await message.channel.send(embedMessage);
-  msg.react(acceptEmoji);
-  msg.react(denyEmoji);
+  try {
+    msg.react(acceptEmoji);
+    msg.react(denyEmoji);
+  }
+  catch (err) {
+    const error = err as DiscordAPIError;
+    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    console.error('Message may be deleted already');
+  }
 
   const req = new MoveRequest();
   req.message = msg;
@@ -837,10 +852,17 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
 
   searchResultMsgs.set(msg.id, searchResult);
 
-  for (let index = 0; index < fields.length; index++) {
-    msg.react(selectionEmojis[index]);
+  try {
+    for (let index = 0; index < fields.length; index++) {
+      msg.react(selectionEmojis[index]);
+    }
+    msg.react(cancelEmoji);
   }
-  msg.react(cancelEmoji);
+  catch (err) {
+    const error = err as DiscordAPIError;
+    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    console.error('Message may be deleted already');
+  }  
 
 }
 
