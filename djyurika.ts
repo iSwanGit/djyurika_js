@@ -19,6 +19,31 @@ const selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', 
 const cancelEmoji = '❌';
 const acceptEmoji = '⭕';
 const denyEmoji = '❌';
+const helpCmd = '`~p 음악`: 유튜브에서 영상 재생\n' +
+'`~q`: 대기열 정보\n' +
+'`~np`: 현재 곡 정보\n' +
+'`~s`: 건너뛰기\n' +
+'`~l`: 채널에서 봇 퇴장\n' + 
+'`~move`: 음성 채널 이동 요청\n';
+const helpCmdMod = '`~p 음악`: 유튜브에서 영상 재생\n' +
+'`~q`: 대기열 정보\n' +
+'`~np`: 현재 곡 정보\n' +
+'`~s`: 건너뛰기\n' +
+'`~l`: 채널에서 봇 퇴장\n' + 
+'`~m`: 재생목록 순서 변경\n' + 
+'`~d`: 재생목록에서 곡 삭제\n' + 
+'`~c`: 재생목록 비우기\n' + 
+'`~move`: 음성 채널 이동\n';
+const helpCmdDev = '`~p 음악`: 유튜브에서 영상 재생\n' +
+'`~q`: 대기열 정보\n' +
+'`~np`: 현재 곡 정보\n' +
+'`~npid`: 현재 곡 ID\n' + 
+'`~s`: 건너뛰기\n' +
+'`~l`: 채널에서 봇 퇴장\n' + 
+'`~m`: 재생목록 순서 변경\n' + 
+'`~d`: 재생목록에서 곡 삭제\n' + 
+'`~c`: 재생목록 비우기\n' + 
+'`~move`: 음성 채널 이동\n';
 
 const searchResultMsgs = new Map<string, SearchResult>(); // string: message id
 const moveRequestList = new Map<string, MoveRequest>();  // string: message id
@@ -336,6 +361,20 @@ client.login(keys.botToken)
 // -------- function definition -------
 
 function sendHelp(message: Discord.Message) {
+  let cmdName: string, cmdValue: string;
+  if (MyUtil.checkModeratorRole(message.member)) {
+    cmdName = '명령어 (Moderator)';
+    cmdValue = helpCmdMod;
+  }
+  else if (MyUtil.checkDeveloperRole(message.member)) {
+    cmdName = '명령어 (Developer)';
+    cmdValue = helpCmdDev;
+  }
+  else {
+    cmdName = '명령어';
+    cmdValue = helpCmd;
+  }
+
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor('사용법', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
     .setColor('#ffff00')
@@ -346,13 +385,8 @@ function sendHelp(message: Discord.Message) {
         '2. 키워드 검색\n'
       },
       {
-        name: '명령어',
-        value: '`~p 음악`: 유튜브에서 영상 재생\n' +
-        '`~q`: 대기열 정보\n' +
-        '`~np`: 현재 곡 정보\n' +
-        '`~s`: 건너뛰기\n' +
-        '`~l`: 채널에서 봇 퇴장\n' + 
-        '`~move`: 음성 채널 이동 요청\n'
+        name: cmdName,
+        value: cmdValue,
       },
     );
 
