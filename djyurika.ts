@@ -74,6 +74,12 @@ client.on('message', async message => {
   // ignore messages from another channel
   if (message.channel.id !== environment.commandChannelID) return;
 
+  // need help?
+  const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
+  if (cmd === 'h') {
+    return sendHelp(message);
+  }
+
   // check sender is in voice channel (except moderator and developer)
   const voiceChannel = message.member.voice.channel;
   if (!(checkDeveloperRole(message.member) || checkModeratorRole(message.member))) {
@@ -82,13 +88,8 @@ client.on('message', async message => {
     }
   }
 
-  const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
 
   switch (cmd) {
-    case 'h':
-      sendHelp(message);
-      break;
-
     case 'p':
       execute(message);
       break;
