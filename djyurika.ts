@@ -363,13 +363,13 @@ client.login(keys.botToken)
 
 function sendHelp(message: Discord.Message) {
   let cmdName: string, cmdValue: string;
-  if (checkModeratorRole(message.member)) {
-    cmdName = '명령어 (Moderator)';
-    cmdValue = helpCmdMod;
-  }
-  else if (checkDeveloperRole(message.member)) {
+  if (checkDeveloperRole(message.member)) {
     cmdName = '명령어 (Developer)';
     cmdValue = helpCmdDev;
+  }
+  else if (checkModeratorRole(message.member)) {
+    cmdName = '명령어 (Moderator)';
+    cmdValue = helpCmdMod;
   }
   else {
     cmdName = '명령어';
