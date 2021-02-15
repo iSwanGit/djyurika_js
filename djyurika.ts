@@ -5,7 +5,7 @@ import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
 import { LeaveRequest, MoveRequest, SearchError, SearchResult, Song, SongQueue, YoutubeSearch } from './types';
-import * as MyUtil from './util';
+import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import DJYurikaDB from './DJYurikaDB';
 
 consoleStamp(console, {
@@ -76,7 +76,7 @@ client.on('message', async message => {
 
   // check sender is in voice channel (except moderator and developer)
   const voiceChannel = message.member.voice.channel;
-  if (!(MyUtil.checkDeveloperRole(message.member) || MyUtil.checkModeratorRole(message.member))) {
+  if (!(checkDeveloperRole(message.member) || checkModeratorRole(message.member))) {
     if (!voiceChannel) {
       return message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
     }
@@ -110,7 +110,7 @@ client.on('message', async message => {
       break;
 
     case 'npid':
-      if (MyUtil.checkDeveloperRole(message.member)) {
+      if (checkDeveloperRole(message.member)) {
         if (queue && queue.songs.length > 0) {
           message.channel.send(`🎵 id: \`${queue.songs[0].id}\``)
         }
@@ -118,19 +118,19 @@ client.on('message', async message => {
       break;
 
     case 'd':
-      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
         deleteSong(message);
       }
       break;
 
     case 'm':
-      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
         modifyOrder(message);
       }
       break;
 
     case 'c':
-      if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
         clearQueue(message);
       }
       break;
@@ -191,7 +191,7 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
     // music select
 
     //  except developer or moderator
-    if (!(MyUtil.checkDeveloperRole(reactedUser) || MyUtil.checkModeratorRole(reactedUser))) {
+    if (!(checkDeveloperRole(reactedUser) || checkModeratorRole(reactedUser))) {
       const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
       // requested user only
       if (user.id !== selectedMsg.reqUser.id) return;
@@ -362,11 +362,11 @@ client.login(keys.botToken)
 
 function sendHelp(message: Discord.Message) {
   let cmdName: string, cmdValue: string;
-  if (MyUtil.checkModeratorRole(message.member)) {
+  if (checkModeratorRole(message.member)) {
     cmdName = '명령어 (Moderator)';
     cmdValue = helpCmdMod;
   }
-  else if (MyUtil.checkDeveloperRole(message.member)) {
+  else if (checkDeveloperRole(message.member)) {
     cmdName = '명령어 (Developer)';
     cmdValue = helpCmdDev;
   }
@@ -471,7 +471,7 @@ function nowPlaying(message: Discord.Message) {
       },
       {
         name:   '영상 시간',
-        value:  `${MyUtil.fillZeroPad(song.durationH, 2)}:${MyUtil.fillZeroPad(song.durationM, 2)}:${MyUtil.fillZeroPad(song.durationS, 2)}`,
+        value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
         inline: true,
       }
     );
@@ -581,7 +581,7 @@ async function requestStop(message: Discord.Message) {
     // return message.channel.send("There is no song that I could stop!");
   }
   // if moderator or developer, do stop
-  if (MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+  if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
     return stop(message, null);
   }
   // ignore if user is not in my voice channel
@@ -662,7 +662,7 @@ async function requestMove(message: Discord.Message) {
   }
 
   // move if no one in current voice channel
-  if (joinedVoiceConnection.channel.members.size === 1 || MyUtil.checkModeratorRole(message.member) || MyUtil.checkDeveloperRole(message.member)) {
+  if (joinedVoiceConnection.channel.members.size === 1 || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
     moveVoiceChannel(null, message.channel, userVoiceChannel);
     return;
   }
@@ -814,7 +814,7 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
   // console.log(encodeURIComponent(keyword));
   let res: YoutubeSearch;
   try {
-    res = await MyUtil.getYoutubeSearchList(encodeURIComponent(keyword));
+    res = await getYoutubeSearchList(encodeURIComponent(keyword));
   }
   catch (err) {
     const error = JSON.parse(err).error as SearchError;
@@ -956,7 +956,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       },
       {
         name:   '영상 시간',
-        value:  `${MyUtil.fillZeroPad(song.durationH, 2)}:${MyUtil.fillZeroPad(song.durationM, 2)}:${MyUtil.fillZeroPad(song.durationS, 2)}`,
+        value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
         inline: true,
       },
       {
