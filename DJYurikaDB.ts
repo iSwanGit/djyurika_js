@@ -1,6 +1,7 @@
 import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
 import { Song } from './types';
+import { getRandomInt } from './util';
 
 class DJYurikaDB {
   private pool: Pool;
@@ -51,9 +52,11 @@ class DJYurikaDB {
   public async getRandomSongID(): Promise<string> {
     try {
       const conn = await this.pool.getConnection();
-      const idRow: string = (await conn.query('SELECT id FROM playlist ORDER BY RAND() LIMIT 1'))[0].id;
+      let idRows: string[] = (await conn.query('SELECT id FROM playlist ORDER BY RAND()')).map(value => value.id);
+      idRows = idRows.sort(() => 0.5 - Math.random());  // shuffle one more
+      const id = idRows[getRandomInt(0, idRows.length)];
       conn.end();
-      return idRow;
+      return id;
     }
     catch (err) { console.error(err); }    
   }
