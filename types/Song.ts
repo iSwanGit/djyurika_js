@@ -5,6 +5,7 @@ export class Song {
   channel: string;
   thumbnail: string;
   duration: number;
+  requestUserId: string;
 
   constructor(
     id?: string,
@@ -13,6 +14,7 @@ export class Song {
     channel?: string,
     thumbnail?: string,
     duration?: number,
+    requestUserId?: string
     ) {
       this.id = id;
       this.title = title;
@@ -20,6 +22,7 @@ export class Song {
       this.channel = channel;
       this.thumbnail = thumbnail;
       this.duration = duration;
+      this.requestUserId = requestUserId;
     }
 
   get durationH() {

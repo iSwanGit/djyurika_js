@@ -442,27 +442,42 @@ function skip(message: Discord.Message) {
   
   console.log(`건너 뜀: ${queue.songs[0].title}`);
   message.channel.send(`⏭ \`건너뛰기: ${queue.songs[0].title}\``);
-  if (joinedVoiceConnection.dispatcher) {
+  if (joinedVoiceConnection && joinedVoiceConnection.dispatcher) {
     joinedVoiceConnection.dispatcher.end();
   }
 }
 
 function nowPlaying(message: Discord.Message) {
-  if (!queue || queue.songs.length === 0 || !queue.playing) {
+  if (!queue || queue.songs.length === 0 || !queue.playing || !joinedVoiceConnection || !joinedVoiceConnection.dispatcher) {
     return;
   }
 
   const song = queue.songs[0];
+  // calculate current playtime. 1/3 scale
+  var playtime: number | string = joinedVoiceConnection.dispatcher.streamTime / 1000;
+  const currentPoint = Math.round(playtime / song.duration * 100 / 4);
+  var playbar: string[] | string = Array(26).fill('▬');
+  playbar[currentPoint] = '🔘';
+  playbar = playbar.join('');
+  var remaintime: number | string = song.duration - playtime;
+  if (song.duration >= 3600) {
+    playtime = `${Math.trunc(playtime / 3600), 2}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+    remaintime = `-${Math.trunc(remaintime / 3600), 2}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+  } else {
+    playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+    remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+  }
+
   const embedMessage = new Discord.MessageEmbed()
-    .setAuthor('현재 재생 중', message.guild.me.user.avatarURL(), song.url)
+    .setAuthor(`${joinedVoiceConnection.channel.name} 에서 재생 중`, message.guild.me.user.avatarURL(), song.url)
     .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
     .setColor('#0000ff')
     .setDescription(`[${song.title}](${song.url})`)
     .setThumbnail(song.thumbnail)
     .addFields(
       {
-        name: '현재 음성채널',
-        value:  joinedVoiceConnection.channel.name,
+        name: '\u200B', // invisible zero width space
+        value:  `**선곡: <@${song.requestUserId}>**\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
         inline: false,
       },
       {
@@ -797,6 +812,7 @@ async function selectRandomSong(): Promise<Song> {
       randSong.videoDetails.ownerChannelName,
       randSong.videoDetails.thumbnails.slice(-1)[0].url,
       parseInt(randSong.videoDetails.lengthSeconds),
+      client.user.id,
     );
 
     return song;
@@ -897,6 +913,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     songInfo.videoDetails.ownerChannelName,
     songInfo.videoDetails.thumbnails.slice(-1)[0].url,
     parseInt(songInfo.videoDetails.lengthSeconds),
+    user.id,
     );
   console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
