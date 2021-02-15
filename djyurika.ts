@@ -113,7 +113,7 @@ client.on('message', async message => {
     case 'npid':
       if (checkDeveloperRole(message.member)) {
         if (queue && queue.songs.length > 0) {
-          message.channel.send(`🎵 id: \`${queue.songs[0].id}\``)
+          message.channel.send(`🎵 id: \`${queue.songs[0]?.id}\``)
         }
       }
       break;
@@ -440,8 +440,9 @@ function skip(message: Discord.Message) {
   if (!queue || queue.songs.length === 0)
     return; // message.channel.send('There is no song that I could skip!');
   
-  console.log(`건너 뜀: ${queue.songs[0].title}`);
-  message.channel.send(`⏭ \`건너뛰기: ${queue.songs[0].title}\``);
+  // 큐 변경 중 shift 일어날 경우 undefined에러 발생, ?로 객체 존재여부 확인 추가
+  console.log(`건너 뜀: ${queue.songs[0]?.title}`);
+  message.channel.send(`⏭ \`건너뛰기: ${queue.songs[0]?.title}\``);
   if (joinedVoiceConnection && joinedVoiceConnection.dispatcher) {
     joinedVoiceConnection.dispatcher.end();
   }
@@ -453,6 +454,7 @@ function nowPlaying(message: Discord.Message) {
   }
 
   const song = queue.songs[0];
+  if (!song) return message.channel.send('`Error: song object not defined`');  // prevent error
   // calculate current playtime. 1/3 scale
   var playtime: number | string = joinedVoiceConnection.dispatcher.streamTime / 1000;
   const currentPoint = Math.round(playtime / song.duration * 100 / 4);
@@ -504,7 +506,7 @@ function getQueue(message: Discord.Message) {
   let queueData = '';
   const currentSong = queue.songs[0];
   queue.songs.slice(1).forEach((song, index) => {
-    queueData += `${index+1}. [${song.title}](${song.url})\n`;
+    queueData += `${index+1}. [${song?.title}](${song?.url})\n`;
   });
 
   const embedMessage = new Discord.MessageEmbed()
@@ -514,7 +516,7 @@ function getQueue(message: Discord.Message) {
     .addFields(
       {
         name: '지금 재생 중: ' + joinedVoiceConnection.channel.name,
-        value: `[${currentSong.title}](${currentSong.url})`,
+        value: `[${currentSong?.title}](${currentSong?.url})`,
         inline: false,
       },
       {
@@ -561,7 +563,9 @@ function deleteSong(message: Discord.Message) {
   }
 
   const removedSong = queue.songs.splice(index, 1);
-  message.channel.send(`❎ \`대기열 ${index}번째 삭제: ${removedSong[0].title}\``);
+  if (removedSong) {
+    message.channel.send(`❎ \`대기열 ${index}번째 삭제: ${removedSong[0]?.title}\``);   
+  }
 }
 
 function modifyOrder(message: Discord.Message) {
