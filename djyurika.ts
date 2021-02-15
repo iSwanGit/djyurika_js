@@ -477,7 +477,7 @@ function nowPlaying(message: Discord.Message) {
     .addFields(
       {
         name: '\u200B', // invisible zero width space
-        value:  `**선곡: <@${song.requestUserId}>**\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+        value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
         inline: false,
       },
       {
@@ -501,8 +501,9 @@ function getQueue(message: Discord.Message) {
   }
 
   const guildName = message.guild.name;
-  let queueData = "";
-  queue.songs.map((song, index) => {
+  let queueData = '';
+  const currentSong = queue.songs[0];
+  queue.songs.slice(1).forEach((song, index) => {
     queueData += `${index+1}. [${song.title}](${song.url})\n`;
   });
 
@@ -512,8 +513,14 @@ function getQueue(message: Discord.Message) {
     .setColor('#FFC0CB')
     .addFields(
       {
-        name: '현재 음성채널: ' + joinedVoiceConnection.channel.name,
-        value: queueData,
+        name: '지금 재생 중: ' + joinedVoiceConnection.channel.name,
+        value: `[${currentSong.title}](${currentSong.url})`,
+        inline: false,
+      },
+      {
+        name: '대기열',
+        value: queueData || '없음 (다음 곡 랜덤 재생)',
+        inline: false,
       },
     );
   
@@ -544,19 +551,17 @@ function deleteSong(message: Discord.Message) {
   if (args.length < 2) {
     return message.channel.send('`~d <queue_index>`');
   }
-  if (!queue || queue.songs.length === 0) {
+  if (!queue || queue.songs.length <= 1) {
     return message.channel.send('대기열이 비었음');
   }
-  if (args[1] === '1') {
-    return skip(message);    
-  }
+
   const index = parseInt(args[1]);
   if (isNaN(index) || index < 1 || index > queue.songs.length) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
   }
 
-  const removedSong = queue.songs.splice(index-1, 1);
-  message.channel.send(`❎ \`재생목록 ${index}번째 삭제: ${removedSong[0].title}\``);
+  const removedSong = queue.songs.splice(index, 1);
+  message.channel.send(`❎ \`대기열 ${index}번째 삭제: ${removedSong[0].title}\``);
 }
 
 function modifyOrder(message: Discord.Message) {
@@ -564,16 +569,13 @@ function modifyOrder(message: Discord.Message) {
   if (args.length < 3) {
     return message.channel.send('`~m <target_index> <new_index>`');
   }
-  if (!queue || queue.songs.length === 0) {
+  if (!queue || queue.songs.length <= 1) {
     return message.channel.send('대기열이 비었음');
   }
   const targetIndex = parseInt(args[1]);
   const newIndex = parseInt(args[2]);
   if (isNaN(targetIndex) || isNaN(newIndex)) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
-  }
-  if (targetIndex === 1 || newIndex === 1) {
-    return message.channel.send('앗 그건 좀... 맨 앞은 이미 재생중인데..');
   }
   if (targetIndex === newIndex) {
     return message.channel.send('`Ignored: same index`');
@@ -584,8 +586,8 @@ function modifyOrder(message: Discord.Message) {
   }
 
   // shift order
-  const targetSong = queue.songs.splice(targetIndex-1, 1)[0];
-  queue.songs.splice(newIndex-1, 0, targetSong);
+  const targetSong = queue.songs.splice(targetIndex, 1)[0];
+  queue.songs.splice(newIndex, 0, targetSong);
   message.channel.send('✅ `순서 변경 완료`');
 }
 
@@ -979,7 +981,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       },
       {
         name:   '대기열',
-        value:  queue.songs.length,
+        value:  queue.songs.length - 1,
         inline: true,
       },
     );
