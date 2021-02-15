@@ -512,7 +512,7 @@ function stop(message: Discord.Message, delMsgId: string) {
     try {
       voiceChannel.leave();
       if (delMsgId) {
-        message.channel.messages.cache.get(delMsgId).delete();
+        message.channel.messages.fetch(delMsgId).then(msg => msg.delete());
       }
       return message.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
     }
