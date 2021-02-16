@@ -1,4 +1,4 @@
-import Discord, { DiscordAPIError, DMChannel, Message, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DiscordAPIError, DMChannel, GuildMember, Message, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -888,10 +888,14 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
 }
 
 async function playRequest(message: Discord.Message, user: Discord.User, url: string, msgId: string) {
+  let reqMember: GuildMember;
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
   if (!voiceChannel) {
-    voiceChannel = message.guild.members.cache.get(user.id).voice.channel;
+    reqMember = message.guild.members.cache.get(user.id);
+    voiceChannel = reqMember.voice.channel;
+  } else {
+    reqMember = message.member;
   }
 
   // get song info
@@ -956,7 +960,10 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
     
     if (joinedVoiceConnection.channel.members.size === 1) { // no one
-      moveVoiceChannel(null, message.channel, message.guild.members.cache.get(user.id).voice.channel);
+      // if moderator, developer without voice channel, then ignore
+      if (reqMember.voice.channel) {
+        moveVoiceChannel(null, message.channel, reqMember.voice.channel);
+      }
     }
 
     const embedMessage = new Discord.MessageEmbed()
@@ -990,7 +997,8 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   
     message.channel.send(embedMessage);
     
-    if (message.guild.members.cache.get(user.id).voice.channel.id !== joinedVoiceConnection.channel.id) {
+    // if moderator, developer without voice channel, then ignore
+    if (reqMember.voice.channel && (reqMember.voice.channel?.id !== joinedVoiceConnection.channel.id)) {
       message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
     }
     return;
@@ -1020,4 +1028,8 @@ async function moveVoiceChannel(message: Discord.Message, commandChannel: TextCh
     `${err.message}`+
     '```');
   }
+}
+
+function updateNowPlayingProgrssbar() {
+  
 }
