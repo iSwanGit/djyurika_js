@@ -401,18 +401,21 @@ async function execute(message: Discord.Message) {
     return message.channel.send('`~p <song_link>` or `~p <exact_keyword>`');
   }
 
-  // check sender is in voice channel
-  const voiceChannel = message.member.voice.channel;
-  if (!voiceChannel) {
-    return message.reply('음성 채널에 들어와서 다시 요청해 주세요.');    
-  }
+  // Developer/Moderator skip voice check when music playing
+  if (!(queue && queue.songs.length)) {
+    // check sender is in voice channel
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel) {
+      return message.reply('음성 채널에 들어와서 다시 요청해 주세요.');    
+    }
 
-  // check permission of voice channel
-  const permissions = voiceChannel.permissionsFor(message.client.user);
-  if (!joinedVoiceConnection && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
-    return message.channel.send('```cs\n'+
-    '# Error: 요청 음성채널 권한 없음\n'+
-    '```');
+    // check permission of voice channel
+    const permissions = voiceChannel.permissionsFor(message.client.user);
+    if (!joinedVoiceConnection && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
+      return message.channel.send('```cs\n'+
+      '# Error: 요청 음성채널 권한 없음\n'+
+      '```');
+    }
   }
 
   const arg = message.content.split(' ').slice(1).join(' ');
