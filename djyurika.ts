@@ -56,6 +56,8 @@ process.setMaxListeners(0); // release limit (for voicestatechange event handler
 
 // init
 client.once('ready', () => {
+  // TODO: Reset voice state and activity 
+  // cannot force remove activity from here
   console.log('Ready!');
 });
 client.once('reconnecting', () => {
@@ -748,6 +750,7 @@ function onDisconnect() {
   }
   queue.songs = [];
   joinedVoiceConnection = null;
+  client.user.setActivity();
   searchResultMsgs.clear();
   moveRequestList.clear();
   leaveRequestList.clear();
