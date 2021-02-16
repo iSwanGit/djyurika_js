@@ -748,6 +748,9 @@ function onDisconnect() {
   }
   queue.songs = [];
   joinedVoiceConnection = null;
+  searchResultMsgs.clear();
+  moveRequestList.clear();
+  leaveRequestList.clear();
   console.log('음성 채널 연결 종료됨');
 }
 
