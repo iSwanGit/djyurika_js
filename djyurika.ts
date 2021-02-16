@@ -475,7 +475,7 @@ function nowPlaying(message: Discord.Message) {
 
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor(`${joinedVoiceConnection.channel.name} 에서 재생 중`, message.guild.me.user.avatarURL(), song.url)
-    .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
+    .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
     .setColor('#0000ff')
     .setDescription(`[${song.title}](${song.url})`)
     .setThumbnail(song.thumbnail)
@@ -514,7 +514,7 @@ function getQueue(message: Discord.Message) {
 
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor(`${guildName}의 재생목록`, message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
-    .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
+    .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
     .setColor('#FFC0CB')
     .addFields(
       {
@@ -961,7 +961,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
 
     const embedMessage = new Discord.MessageEmbed()
     .setAuthor('재생목록 추가', user.avatarURL(), song.url)
-    .setFooter('Youtube', 'http://mokky.ipdisk.co.kr:8000/list/HDD1/icon/youtube_logo.png')
+    .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
     .setColor('#0000ff')
     .setDescription(`[${song.title}](${song.url})`)
     .setThumbnail(song.thumbnail)
