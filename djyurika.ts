@@ -315,7 +315,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
   let state: UpdatedVoiceState;
   // discriminate voice state
-  if (oldState.channel.id === joinedVoiceConnection.channel.id && newState.channel.id !== joinedVoiceConnection.channel.id) {
+  if (oldState.channel?.id === joinedVoiceConnection.channel.id && !newState.channel) {
     // 나감
     state = UpdatedVoiceState.OUT;
     channelJoinRequestMember = null;
@@ -970,7 +970,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       connection.on('disconnect', () => {
         onDisconnect();
       });
-      console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.nickname})`);
+      console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.user.username})`);
       joinedVoiceConnection = connection;
       channelJoinRequestMember = reqMember;
       play(message.guild, queue.songs[0]);
@@ -1050,7 +1050,7 @@ async function moveVoiceChannel(message: Discord.Message, triggeredMember: Disco
     connection.on('disconnect', () => {
       onDisconnect();
     });
-    console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.nickname})`);
+    console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.user.username})`);
     joinedVoiceConnection = connection;
     channelJoinRequestMember = triggeredMember;
     // delete message
