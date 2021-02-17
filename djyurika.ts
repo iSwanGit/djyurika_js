@@ -1,4 +1,4 @@
-import Discord, { DiscordAPIError, DMChannel, GuildMember, Message, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DiscordAPIError, DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -330,7 +330,11 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   moveRequestList.forEach((req, msgId, list) => {
     // 채널 소환자가 나가면
     if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
-      req.message.edit('⚠ `요청 취소됨`'); // my message, no error
+      const newEmbed = new MessageEmbed({
+        description: '⚠ 요청 취소됨',
+      })
+      req.message.edit(newEmbed); // my message, no error
+      req.message.reactions.removeAll();
       return list.delete(msgId);  // == continue, cannot break (overhead)
     }
     else {
@@ -353,7 +357,11 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   for (let [key, req] of leaveRequestList) {
     // 채널 소환자가 나가면
     if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
-      req.message.edit('⚠ `요청 취소됨`'); // my message, no error
+      const newEmbed = new MessageEmbed({
+        description: '⚠ 요청 취소됨',
+      })
+      req.message.edit(newEmbed); // my message, no error
+      req.message.reactions.removeAll();
       leaveRequestList.delete(key);
     }
     // if my voice channel has changed(req channel is different), ignore all
