@@ -4,7 +4,7 @@ import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
-import { LeaveRequest, MoveRequest, SearchError, SearchResult, Song, SongQueue, YoutubeSearch } from './types';
+import { LeaveRequest, MoveRequest, SearchError, SearchResult, Song, SongQueue, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import DJYurikaDB from './DJYurikaDB';
 
@@ -51,7 +51,7 @@ const leaveRequestList = new Map<string, LeaveRequest>();  // string: message id
 
 var queue: SongQueue;
 let joinedVoiceConnection: Discord.VoiceConnection;
-let recentJoinRequestMember: Discord.GuildMember;
+let channelJoinRequestMember: Discord.GuildMember;
 
 process.setMaxListeners(0); // release limit (for voicestatechange event handler)
 
@@ -308,34 +308,56 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
   return;
 });
 
+// Event가 발생한 Member의 State
 client.on('voiceStateUpdate', (oldState, newState) => {
-  // console.log(oldState);
-  // console.log(newState);
   
   if (!joinedVoiceConnection) return;
-  
+
+  let state: UpdatedVoiceState;
+  // discriminate voice state
+  if (oldState.channel.id === joinedVoiceConnection.channel.id && newState.channel.id !== joinedVoiceConnection.channel.id) {
+    // 나감
+    state = UpdatedVoiceState.OUT;
+    channelJoinRequestMember = null;
+  }
+  else {
+    state = UpdatedVoiceState.NONE;
+  }
+
   // vote re-calculate
   const currentJoinedUsers = joinedVoiceConnection.channel.members;
   // current count
-  moveRequestList.forEach(req => {
-    const acceptedVotes = req.acceptedMemberIds;
-    const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
-    let acceptedVoiceMemberCount = 0;
-    currentJoinedUsers.forEach(user => {
-      if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
-    });
-    // 과반수, ok
-    if (acceptedVoiceMemberCount >= minimumAcceptCount) {
-      // send message
-      req.message.channel.send('🔊 인원수 변동으로 인한 과반수의 동의로 음성채널을 이동합니다');
-      // channel move
-      moveVoiceChannel(req.message, req.reqUser, req.message.channel, req.targetChannel);
+  moveRequestList.forEach((req, msgId, list) => {
+    // 채널 소환자가 나가면
+    if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
+      req.message.edit('⚠ `요청 취소됨`'); // my message, no error
+      return list.delete(msgId);  // == continue, cannot break (overhead)
+    }
+    else {
+      const acceptedVotes = req.acceptedMemberIds;
+      const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
+      let acceptedVoiceMemberCount = 0;
+      currentJoinedUsers.forEach(user => {
+        if (acceptedVotes.includes(user.id)) acceptedVoiceMemberCount++;
+      });
+      // 과반수, ok
+      if (acceptedVoiceMemberCount >= minimumAcceptCount) {
+        // send message
+        req.message.channel.send('🔊 인원수 변동으로 인한 과반수의 동의로 음성채널을 이동합니다');
+        // channel move
+        moveVoiceChannel(req.message, req.reqUser, req.message.channel, req.targetChannel);
+      }
     }
   });
   
   for (let [key, req] of leaveRequestList) {
-    // if voice channel has changed, ignore all
-    if (joinedVoiceConnection.channel.id !== req.voiceChannel.id) {
+    // 채널 소환자가 나가면
+    if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
+      req.message.edit('⚠ `요청 취소됨`'); // my message, no error
+      leaveRequestList.delete(key);
+    }
+    // if my voice channel has changed(req channel is different), ignore all
+    else if (joinedVoiceConnection.channel.id !== req.voiceChannel.id) {
       req.message.delete();
       leaveRequestList.delete(key);
     }
@@ -348,8 +370,10 @@ client.on('voiceStateUpdate', (oldState, newState) => {
       });
       // 과반수, ok
       if (acceptedVoiceMemberCount >= minimumAcceptCount) {
-        // send message
-        req.message.channel.send('🔊 인원수 변동으로 인한 과반수 동의, 그럼 20000 들어가보겠습니다');
+        // send message unless no members left
+        if (acceptedVoiceMemberCount) {
+          req.message.channel.send('🔊 인원수 변동으로 인한 과반수 동의, 그럼 20000 들어가보겠습니다');
+        }
         stop(req.message, req.message.id);
         leaveRequestList.clear();
         break;
@@ -608,8 +632,9 @@ async function requestStop(message: Discord.Message) {
     return;
     // return message.channel.send("There is no song that I could stop!");
   }
-  // if channel summoner, moderator or developer, do stop
-  if (recentJoinRequestMember.id === message.member.id || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+  // if no summoner, channel summoner, moderator or developer, do stop
+  if (!channelJoinRequestMember || channelJoinRequestMember?.id === message.member.id
+      || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
     return stop(message, null);
   }
   // ignore if user is not in my voice channel
@@ -689,8 +714,9 @@ async function requestMove(message: Discord.Message) {
     return;
   }
 
-  // move if no one in current voice channel
-  if (joinedVoiceConnection.channel.members.size === 1 || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+  // move if no summoner, summoner's request, or if no one in current voice channel
+  if (!channelJoinRequestMember || message.member.id === channelJoinRequestMember?.id
+      || joinedVoiceConnection.channel.members.size === 1 || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
     moveVoiceChannel(null, message.member, message.channel, userVoiceChannel);
     return;
   }
@@ -751,6 +777,7 @@ function onDisconnect() {
   }
   queue.songs = [];
   joinedVoiceConnection = null;
+  channelJoinRequestMember = null;
   client.user.setActivity();
   searchResultMsgs.clear();
   moveRequestList.clear();
@@ -945,7 +972,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       });
       console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.nickname})`);
       joinedVoiceConnection = connection;
-      recentJoinRequestMember = reqMember;
+      channelJoinRequestMember = reqMember;
       play(message.guild, queue.songs[0]);
     }
     catch (err) {
@@ -961,6 +988,11 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     }
   } else {
     addToPlaylist(song);
+
+    // 최초 부른 사용자가 나가면 채워넣기
+    if (!channelJoinRequestMember) {
+      channelJoinRequestMember = message.member;
+    }
 
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
     
@@ -1020,7 +1052,7 @@ async function moveVoiceChannel(message: Discord.Message, triggeredMember: Disco
     });
     console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.nickname})`);
     joinedVoiceConnection = connection;
-    recentJoinRequestMember = triggeredMember;
+    channelJoinRequestMember = triggeredMember;
     // delete message
     if (message) {
       moveRequestList.delete(message.id);
