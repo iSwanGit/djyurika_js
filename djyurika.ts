@@ -51,6 +51,7 @@ const leaveRequestList = new Map<string, LeaveRequest>();  // string: message id
 
 var queue: SongQueue;
 let joinedVoiceConnection: Discord.VoiceConnection;
+let recentJoinRequestMember: Discord.GuildMember;
 
 process.setMaxListeners(0); // release limit (for voicestatechange event handler)
 
@@ -257,7 +258,7 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
         // send message
         reaction.message.channel.send('🔊 과반수의 동의로 음성채널을 이동합니다');
         // channel move
-        moveVoiceChannel(reaction.message, reaction.message.channel, selectedMsg.targetChannel);
+        moveVoiceChannel(reaction.message, reactedUser, reaction.message.channel, selectedMsg.targetChannel);
       }
     }
     return;
@@ -328,7 +329,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
       // send message
       req.message.channel.send('🔊 인원수 변동으로 인한 과반수의 동의로 음성채널을 이동합니다');
       // channel move
-      moveVoiceChannel(req.message, req.message.channel, req.targetChannel);
+      moveVoiceChannel(req.message, req.reqUser, req.message.channel, req.targetChannel);
     }
   });
   
@@ -607,8 +608,8 @@ async function requestStop(message: Discord.Message) {
     return;
     // return message.channel.send("There is no song that I could stop!");
   }
-  // if moderator or developer, do stop
-  if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+  // if channel summoner, moderator or developer, do stop
+  if (recentJoinRequestMember.id === message.member.id || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
     return stop(message, null);
   }
   // ignore if user is not in my voice channel
@@ -690,7 +691,7 @@ async function requestMove(message: Discord.Message) {
 
   // move if no one in current voice channel
   if (joinedVoiceConnection.channel.members.size === 1 || checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
-    moveVoiceChannel(null, message.channel, userVoiceChannel);
+    moveVoiceChannel(null, message.member, message.channel, userVoiceChannel);
     return;
   }
 
@@ -942,8 +943,9 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       connection.on('disconnect', () => {
         onDisconnect();
       });
-      console.info('연결 됨: ' + voiceChannel.name);
+      console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.nickname})`);
       joinedVoiceConnection = connection;
+      recentJoinRequestMember = reqMember;
       play(message.guild, queue.songs[0]);
     }
     catch (err) {
@@ -965,7 +967,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     if (joinedVoiceConnection.channel.members.size === 1) { // no one
       // if moderator, developer without voice channel, then ignore
       if (reqMember.voice.channel) {
-        moveVoiceChannel(null, message.channel, reqMember.voice.channel);
+        moveVoiceChannel(null, reqMember, message.channel, reqMember.voice.channel);
       }
     }
 
@@ -1008,7 +1010,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   }
 }
 
-async function moveVoiceChannel(message: Discord.Message, commandChannel: TextChannel | DMChannel | NewsChannel, voiceChannel: Discord.VoiceChannel) {
+async function moveVoiceChannel(message: Discord.Message, triggeredMember: Discord.GuildMember, commandChannel: TextChannel | DMChannel | NewsChannel, voiceChannel: Discord.VoiceChannel) {
   try {
     console.log('음성 채널 이동 중...');
     commandChannel.send(`🔗 \`연결: ${voiceChannel.name}\``);
@@ -1016,8 +1018,9 @@ async function moveVoiceChannel(message: Discord.Message, commandChannel: TextCh
     connection.on('disconnect', () => {
       onDisconnect();
     });
-    console.info('연결 됨: ' + voiceChannel.name);
+    console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.nickname})`);
     joinedVoiceConnection = connection;
+    recentJoinRequestMember = triggeredMember;
     // delete message
     if (message) {
       moveRequestList.delete(message.id);
