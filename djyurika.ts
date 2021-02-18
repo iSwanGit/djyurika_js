@@ -146,6 +146,12 @@ client.on('message', async message => {
       requestMove(message);
       break;
 
+    case 'v':
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+        changeVolume(message);
+      }
+      break;
+
     default:
       message.channel.send('사용법: `~h`');
       break;
@@ -795,6 +801,28 @@ function clearQueue(message: Message) {
   message.channel.send('❎ `모든 대기열 삭제 완료`');
 }
 
+function changeVolume(message: Message) {
+  if (!joinedVoiceConnection) return;
+
+  const args = message.content.split(' ');
+  if (args.length < 2) {
+    return message.channel.send('`~v <0~100> | default`');
+  }
+
+  const volume = parseInt(args[1])
+  if (args[1] === 'default') {
+    joinedVoiceConnection.dispatcher.setVolumeLogarithmic(environment.defaultVolume/100);
+    return message.channel.send(`✅ \`Set volume to default ${environment.defaultVolume}\``);
+  }
+  else if (isNaN(volume) || volume < 0 || volume > 100) {
+    return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+  }
+  else {
+    joinedVoiceConnection.dispatcher.setVolumeLogarithmic(volume/100);
+    return message.channel.send(`✅ \`Set volume to ${volume}\``);
+  }
+}
+
 // --- internal
 
 function onDisconnect() {
@@ -854,7 +882,7 @@ async function play(guild: Discord.Guild, song: Song) {
       '```');
       console.error(error);
     });
-  dispatcher.setVolumeLogarithmic(queue.volume / 5);
+  dispatcher.setVolumeLogarithmic(queue.volume / 100);
 
   db.increasePlayCount(song.id);
   db.fillEmptySongInfo(song.id, song.title);
@@ -984,7 +1012,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   if (!queue || joinedVoiceConnection === null) {
-    queue = new SongQueue(message.channel, [], 5, true);
+    queue = new SongQueue(message.channel, [], environment.defaultVolume, true);
 
     addToPlaylist(song);
 
@@ -1019,7 +1047,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
     // 최초 부른 사용자가 나가면 채워넣기
     if (!channelJoinRequestMember) {
       channelJoinRequestMember = reqMember;
-      console.info(reqMember.user.username + ' is new summoner');
+      console.info(reqMember.displayName + ' is new summoner');
     }
 
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
@@ -1078,7 +1106,7 @@ async function moveVoiceChannel(message: Discord.Message, triggeredMember: Disco
     connection.on('disconnect', () => {
       onDisconnect();
     });
-    console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.user.username})`);
+    console.info(`연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
     joinedVoiceConnection = connection;
     channelJoinRequestMember = triggeredMember;
     // delete message

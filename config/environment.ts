@@ -1,5 +1,6 @@
 export const environment = {
   prefix: '~',
+  defaultVolume: 35,
   
   commandChannelID: '810524606812651520',
   developerRoleID: '760741584492298251',
