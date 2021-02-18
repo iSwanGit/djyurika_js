@@ -323,7 +323,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
     // 나감
     state = UpdatedVoiceState.OUT;
     console.log(oldState.member.user.username + ' leaved');
-    if (oldState.member.id === channelJoinRequestMember.id) {
+    if (oldState.member.id === channelJoinRequestMember?.id) {
       channelJoinRequestMember = null;
       console.info(oldState.member.user.username + ' was summoner');
     }
