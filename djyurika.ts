@@ -708,7 +708,7 @@ async function requestStop(message: Discord.Message) {
   catch (err) {
     // const error = err as DiscordAPIError;
     // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-    console.error('Message may be deleted already');
+    console.error('Reaction Error: Stop request message deleted already');
   }
   
 
@@ -777,7 +777,7 @@ async function requestMove(message: Discord.Message) {
   catch (err) {
     // const error = err as DiscordAPIError;
     // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-    console.error('Message may be deleted already');
+    console.error('Reaction Error: Move request message deleted already');
   }
 
   const req = new MoveRequest();
@@ -943,7 +943,7 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
   catch (err) {
     // const error = err as DiscordAPIError;
     // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-    console.error('Message may be deleted already');
+    console.error('Reaction Error: Search message deleted already');
   }  
 
 }
@@ -1100,11 +1100,11 @@ function updateNowPlayingProgrssbar() {
   intervalHandler = setInterval(() => {
     try {
       if (!recentNowPlayingMessage) {
-        throw Error('Message ref changed to null, stop update now playing message');
+        throw Error('Now playing message ref is changed to null, stop update');
       }
       else {
         const song = queue.songs[0];
-        if (!song) throw Error('song object not defined');  // prevent error
+        if (!song) throw Error('Song object not defined');  // prevent error
         
         // calculate current playtime. 1/3 scale
         var playtime: number | string = joinedVoiceConnection.dispatcher.streamTime / 1000;
@@ -1144,7 +1144,7 @@ function updateNowPlayingProgrssbar() {
             inline: true,
           }
         );
-        if (recentNowPlayingMessage.deleted) throw Error('Message may be deleted');
+        if (recentNowPlayingMessage.deleted) throw Error('Now playing message is deleted');
         else recentNowPlayingMessage.edit(embedMessage);
       }
     }
