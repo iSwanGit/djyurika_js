@@ -318,7 +318,15 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   if (oldState.channel?.id === joinedVoiceConnection.channel.id && !newState.channel) {
     // 나감
     state = UpdatedVoiceState.OUT;
-    channelJoinRequestMember = null;
+    console.log(oldState.member.user.username + ' leaved');
+    if (oldState.member.id === channelJoinRequestMember.id) {
+      channelJoinRequestMember = null;
+      console.info(oldState.member.user.username + ' was summoner');
+    }
+  }
+  else if (!oldState.channel && newState.channel?.id === joinedVoiceConnection.channel.id) {
+    state = UpdatedVoiceState.IN;
+    console.log(oldState.member.user.username + ' joined');
   }
   else {
     state = UpdatedVoiceState.NONE;
