@@ -937,13 +937,12 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
 }
 
 async function playRequest(message: Discord.Message, user: Discord.User, url: string, msgId: string) {
-  let reqMember: GuildMember;
+  let reqMember = message.guild.members.cache.get(user.id);
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
   if (!voiceChannel) {
     voiceChannel = reqMember.voice.channel;
   }
-  reqMember = message.guild.members.cache.get(user.id);
 
   // get song info
   let songInfo: ytdlc.videoInfo;
