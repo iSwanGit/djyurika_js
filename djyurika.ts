@@ -1,4 +1,4 @@
-import Discord, { DiscordAPIError, DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DiscordAPIError, DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextChannel, VoiceConnection } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
@@ -50,8 +50,11 @@ const moveRequestList = new Map<string, MoveRequest>();  // string: message id
 const leaveRequestList = new Map<string, LeaveRequest>();  // string: message id
 
 var queue: SongQueue;
-let joinedVoiceConnection: Discord.VoiceConnection;
-let channelJoinRequestMember: Discord.GuildMember;
+let joinedVoiceConnection: VoiceConnection;
+let channelJoinRequestMember: GuildMember;
+let recentNowPlayingMessage: Message;
+let intervalHandler: NodeJS.Timeout;
+const interval = 13000;
 
 process.setMaxListeners(0); // release limit (for voicestatechange event handler)
 
@@ -496,7 +499,7 @@ function skip(message: Discord.Message) {
   }
 }
 
-function nowPlaying(message: Discord.Message) {
+async function nowPlaying(message: Discord.Message) {
   if (!queue || queue.songs.length === 0 || !queue.playing || !joinedVoiceConnection || !joinedVoiceConnection.dispatcher) {
     return;
   }
@@ -542,7 +545,8 @@ function nowPlaying(message: Discord.Message) {
       }
     );
   
-  return message.channel.send(embedMessage);
+  recentNowPlayingMessage = await message.channel.send(embedMessage);
+  updateNowPlayingProgrssbar();
 }
 
 function getQueue(message: Discord.Message) {
@@ -696,12 +700,14 @@ async function requestStop(message: Discord.Message) {
 
   let msg = await message.channel.send(embedMessage);
   try {
-    msg.react(acceptEmoji);
-    msg.react(denyEmoji);
+    if (msg.deleted) throw Error();
+    else msg.react(acceptEmoji);
+    if (msg.deleted) throw Error();
+    else msg.react(denyEmoji);
   }
   catch (err) {
-    const error = err as DiscordAPIError;
-    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    // const error = err as DiscordAPIError;
+    // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
     console.error('Message may be deleted already');
   }
   
@@ -763,12 +769,14 @@ async function requestMove(message: Discord.Message) {
 
   let msg = await message.channel.send(embedMessage);
   try {
-    msg.react(acceptEmoji);
-    msg.react(denyEmoji);
+    if (msg.deleted) throw Error();
+    else msg.react(acceptEmoji);
+    if (msg.deleted) throw Error();
+    else msg.react(denyEmoji);
   }
   catch (err) {
-    const error = err as DiscordAPIError;
-    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    // const error = err as DiscordAPIError;
+    // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
     console.error('Message may be deleted already');
   }
 
@@ -796,6 +804,7 @@ function onDisconnect() {
   queue.songs = [];
   joinedVoiceConnection = null;
   channelJoinRequestMember = null;
+  recentNowPlayingMessage = null;
   client.user.setActivity();
   searchResultMsgs.clear();
   moveRequestList.clear();
@@ -834,6 +843,7 @@ async function play(guild: Discord.Guild, song: Song) {
     .play(await ytdl(song.url), { type: 'opus' })
     .on("finish", () => {
       console.log(`재생 끝: ${song.title}`);
+      recentNowPlayingMessage = null;
       queue.songs.shift();
       play(guild, queue.songs[0]);
     })
@@ -924,13 +934,15 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
 
   try {
     for (let index = 0; index < fields.length; index++) {
+      if (msg.deleted) throw Error();
       msg.react(selectionEmojis[index]);
     }
+    if (msg.deleted) throw Error();
     msg.react(cancelEmoji);
   }
   catch (err) {
-    const error = err as DiscordAPIError;
-    console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
+    // const error = err as DiscordAPIError;
+    // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
     console.error('Message may be deleted already');
   }  
 
@@ -1085,5 +1097,61 @@ async function moveVoiceChannel(message: Discord.Message, triggeredMember: Disco
 }
 
 function updateNowPlayingProgrssbar() {
-  
+  intervalHandler = setInterval(() => {
+    try {
+      if (!recentNowPlayingMessage) {
+        throw Error('Message ref changed to null, stop update now playing message');
+      }
+      else {
+        const song = queue.songs[0];
+        if (!song) throw Error('song object not defined');  // prevent error
+        
+        // calculate current playtime. 1/3 scale
+        var playtime: number | string = joinedVoiceConnection.dispatcher.streamTime / 1000;
+        const currentPoint = Math.round(playtime / song.duration * 100 / 4);
+        var playbar: string[] | string = Array(26).fill('▬');
+        playbar[currentPoint] = '🔘';
+        playbar = playbar.join('');
+        var remaintime: number | string = song.duration - playtime;
+        if (song.duration >= 3600) {
+          playtime = `${Math.trunc(playtime / 3600), 2}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+          remaintime = `-${Math.trunc(remaintime / 3600), 2}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+        } else {
+          playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+          remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+        }
+
+        const embedMessage = new Discord.MessageEmbed()
+        .setAuthor(`${joinedVoiceConnection.channel.name} 에서 재생 중`, client.user.avatarURL(), song.url)
+        .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
+        .setColor('#0000ff')
+        .setDescription(`[${song.title}](${song.url})`)
+        .setThumbnail(song.thumbnail)
+        .addFields(
+          {
+            name: '\u200B', // invisible zero width space
+            value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+            inline: false,
+          },
+          {
+            name: '채널',
+            value:  song.channel,
+            inline: true,
+          },
+          {
+            name:   '영상 시간',
+            value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
+            inline: true,
+          }
+        );
+        if (recentNowPlayingMessage.deleted) throw Error('Message may be deleted');
+        else recentNowPlayingMessage.edit(embedMessage);
+      }
+    }
+    catch (err) {
+      // cannot catch DiscordAPIError (api issue)
+      console.error(err.message);
+      clearInterval(intervalHandler);
+    }
+  }, interval);
 }
