@@ -931,11 +931,9 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
   if (!voiceChannel) {
-    reqMember = message.guild.members.cache.get(user.id);
     voiceChannel = reqMember.voice.channel;
-  } else {
-    reqMember = message.member;
   }
+  reqMember = message.guild.members.cache.get(user.id);
 
   // get song info
   let songInfo: ytdlc.videoInfo;
