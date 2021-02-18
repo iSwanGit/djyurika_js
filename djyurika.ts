@@ -331,15 +331,15 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   if (oldState.channel?.id === joinedVoiceConnection.channel.id && !newState.channel) {
     // 나감
     state = UpdatedVoiceState.OUT;
-    console.log(oldState.member.user.username + ' leaved');
+    console.log(oldState.member.displayName + ' leaved');
     if (oldState.member.id === channelJoinRequestMember?.id) {
       channelJoinRequestMember = null;
-      console.info(oldState.member.user.username + ' was summoner');
+      console.info(oldState.member.displayName + ' was summoner');
     }
   }
   else if (!oldState.channel && newState.channel?.id === joinedVoiceConnection.channel.id) {
     state = UpdatedVoiceState.IN;
-    console.log(oldState.member.user.username + ' joined');
+    console.log(oldState.member.displayName + ' joined');
   }
   else {
     state = UpdatedVoiceState.NONE;
@@ -963,10 +963,10 @@ async function keywordSearch(message: Discord.Message, msgId: string) {
   try {
     for (let index = 0; index < fields.length; index++) {
       if (msg.deleted) throw Error();
-      msg.react(selectionEmojis[index]);
+      else msg.react(selectionEmojis[index]);
     }
     if (msg.deleted) throw Error();
-    msg.react(cancelEmoji);
+    else msg.react(cancelEmoji);
   }
   catch (err) {
     // const error = err as DiscordAPIError;
@@ -1025,7 +1025,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
       connection.on('disconnect', () => {
         onDisconnect();
       });
-      console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.user.username})`);
+      console.info(`연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
       joinedVoiceConnection = connection;
       channelJoinRequestMember = reqMember;
       play(message.guild, queue.songs[0]);
