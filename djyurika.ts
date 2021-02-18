@@ -208,7 +208,9 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
   
     // cancel
     if (reaction.emoji.name === cancelEmoji) {
-      reaction.message.delete();
+      reaction.message.edit('⚠ `검색 취소됨`');
+      reaction.message.suppressEmbeds();
+      reaction.message.reactions.removeAll();
       searchResultMsgs.delete(reaction.message.id);
       return;
     }
@@ -231,8 +233,9 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
     if (reactedUser.id === selectedMsg.reqUser.id) {
       if (reaction.emoji.name === denyEmoji) {
         // cancel
-        reaction.message.channel.send('⚠ `요청 취소됨`');
-        reaction.message.delete();
+        reaction.message.edit('⚠ `요청 취소됨`');
+        reaction.message.suppressEmbeds();
+        reaction.message.reactions.removeAll();
         moveRequestList.delete(reaction.message.id);
       }
       return;
@@ -270,8 +273,9 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
     if (reactedUser.id === selectedMsg.reqUser.id) {
       if (reaction.emoji.name === denyEmoji) {
         // cancel
-        reaction.message.channel.send('⚠ `요청 취소됨`');
-        reaction.message.delete();
+        reaction.message.edit('⚠ `요청 취소됨`');
+        reaction.message.suppressEmbeds();
+        reaction.message.reactions.removeAll();
         leaveRequestList.delete(reaction.message.id);
         return;
       }
@@ -338,10 +342,8 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   moveRequestList.forEach((req, msgId, list) => {
     // 채널 소환자가 나가면
     if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
-      const newEmbed = new MessageEmbed({
-        description: '⚠ 요청 취소됨',
-      })
-      req.message.edit(newEmbed); // my message, no error
+      req.message.edit('⚠ `요청 취소됨 (퇴장)`'); // my message, no error
+      req.message.suppressEmbeds();
       req.message.reactions.removeAll();
       return list.delete(msgId);  // == continue, cannot break (overhead)
     }
@@ -365,16 +367,16 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   for (let [key, req] of leaveRequestList) {
     // 채널 소환자가 나가면
     if (state === UpdatedVoiceState.OUT && req.reqUser.id === newState.member.id) {
-      const newEmbed = new MessageEmbed({
-        description: '⚠ 요청 취소됨',
-      })
-      req.message.edit(newEmbed); // my message, no error
+      req.message.edit('⚠ `요청 취소됨 (퇴장)`');
+      req.message.suppressEmbeds();
       req.message.reactions.removeAll();
       leaveRequestList.delete(key);
     }
     // if my voice channel has changed(req channel is different), ignore all
     else if (joinedVoiceConnection.channel.id !== req.voiceChannel.id) {
-      req.message.delete();
+      req.message.edit('⚠ `요청 취소됨 (DJ Yurika 채널 이동)`');
+      req.message.suppressEmbeds();
+      req.message.reactions.removeAll();
       leaveRequestList.delete(key);
     }
     else {
@@ -388,7 +390,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
       if (acceptedVoiceMemberCount >= minimumAcceptCount) {
         // send message unless no members left
         if (acceptedVoiceMemberCount) {
-          req.message.channel.send('🔊 인원수 변동으로 인한 과반수 동의, 그럼 20000 들어가보겠습니다');
+          req.message.channel.send('🔊 `인원수 변동으로 인한 과반수 동의, 그럼 20000 들어가보겠습니다`');
         }
         stop(req.message, req.message.id);
         leaveRequestList.clear();
@@ -600,7 +602,7 @@ function deleteSong(message: Discord.Message) {
     return message.channel.send('`~d <queue_index>`');
   }
   if (!queue || queue.songs.length <= 1) {
-    return message.channel.send('대기열이 비었음');
+    return message.channel.send('⚠ `대기열이 비었음`');
   }
 
   const index = parseInt(args[1]);
@@ -620,7 +622,7 @@ function modifyOrder(message: Discord.Message) {
     return message.channel.send('`~m <target_index> <new_index>`');
   }
   if (!queue || queue.songs.length <= 1) {
-    return message.channel.send('대기열이 비었음');
+    return message.channel.send('⚠ `대기열이 비었음`');
   }
   const targetIndex = parseInt(args[1]);
   const newIndex = parseInt(args[2]);
@@ -628,7 +630,7 @@ function modifyOrder(message: Discord.Message) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
   }
   if (targetIndex === newIndex) {
-    return message.channel.send('`Ignored: same index`');
+    return message.channel.send('⚠ `Ignored: same index`');
   }
   const size = queue.songs.length;
   if (targetIndex < 1 || targetIndex > size || newIndex < 1 || newIndex > size) {
@@ -1005,7 +1007,8 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
 
     // 최초 부른 사용자가 나가면 채워넣기
     if (!channelJoinRequestMember) {
-      channelJoinRequestMember = message.member;
+      channelJoinRequestMember = reqMember;
+      console.info(reqMember.user.username + ' is new summoner');
     }
 
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
