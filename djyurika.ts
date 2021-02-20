@@ -328,10 +328,10 @@ client.on('voiceStateUpdate', (oldState, newState) => {
 
   let state: UpdatedVoiceState;
   // discriminate voice state
-  if (oldState.channel?.id === joinedVoiceConnection.channel.id && !newState.channel) {
+  if (oldState.channel?.id === joinedVoiceConnection.channel.id && newState.channel?.id !== joinedVoiceConnection.channel.id) {
     // 나감
     state = UpdatedVoiceState.OUT;
-    console.log(oldState.member.displayName + ' leaved');
+    console.log(oldState.member.displayName + ' leaved ' + joinedVoiceConnection.channel.name);
     if (oldState.member.id === channelJoinRequestMember?.id) {
       channelJoinRequestMember = null;
       console.info(oldState.member.displayName + ' was summoner');
@@ -339,7 +339,7 @@ client.on('voiceStateUpdate', (oldState, newState) => {
   }
   else if (!oldState.channel && newState.channel?.id === joinedVoiceConnection.channel.id) {
     state = UpdatedVoiceState.IN;
-    console.log(oldState.member.displayName + ' joined');
+    console.log(oldState.member.displayName + ' joined ' + joinedVoiceConnection.channel.name);
   }
   else {
     state = UpdatedVoiceState.NONE;
