@@ -1,6 +1,6 @@
 import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
-import { Song } from './types';
+import { Config, Song } from './types';
 import { getRandomInt } from './util';
 
 class DJYurikaDB {
@@ -17,6 +17,28 @@ class DJYurikaDB {
       // const conn = await this.pool.getConnection();
       // this.songList = await conn.query("SELECT * FROM playlist");
       // conn.end();
+    }
+    catch (err) { console.error(err); }
+  }
+
+  public async loadConfig() {
+    try {
+      const conn = await this.pool.getConnection();
+      const config = (await conn.query(`SELECT * FROM config LIMIT 1`))[0] as Config;
+      
+      conn.end();
+      return config;
+    }
+    catch (err) { console.error(err); throw err; }
+  }
+
+  public async saveConfig(config: Config) {
+    try {
+      const conn = await this.pool.getConnection();
+
+      // update each attribute of DBConfig
+      conn.query('UPDATE config SET volume = ?', config.volume)
+        .then(() => conn.end());
     }
     catch (err) { console.error(err); }
   }

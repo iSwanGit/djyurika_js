@@ -4,7 +4,7 @@ import ytdlc from 'ytdl-core';  // for using type declaration
 import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
-import { LeaveRequest, MoveRequest, SearchError, SearchResult, Song, SongQueue, UpdatedVoiceState, YoutubeSearch } from './types';
+import { Config, LeaveRequest, MoveRequest, SearchError, SearchResult, Song, SongQueue, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import DJYurikaDB from './DJYurikaDB';
 
@@ -14,6 +14,7 @@ consoleStamp(console, {
 
 const client = new Discord.Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION'] });
 const db = new DJYurikaDB();
+let config = environment.defaultConfig as Config;  // default setting for situation that config is not loaded
 
 const selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 const cancelEmoji = '❌';
@@ -59,9 +60,10 @@ const interval = 13000;
 process.setMaxListeners(0); // release limit (for voicestatechange event handler)
 
 // init
-client.once('ready', () => {
+client.once('ready', async () => {
   // TODO: Reset voice state and activity 
   // cannot force remove activity from here
+  loadConfig(null);
   console.log('Ready!');
 });
 client.once('reconnecting', () => {
@@ -149,6 +151,18 @@ client.on('message', async message => {
     case 'v':
       if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
         changeVolume(message);
+      }
+      break;
+
+    case 'cl':
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+        loadConfig(message);
+      }
+      break;
+
+    case 'cs':
+      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+        saveConfig(message);
       }
       break;
 
@@ -815,22 +829,61 @@ function changeVolume(message: Message) {
 
   const args = message.content.split(' ');
   if (args.length < 2) {
-    return message.channel.send('`~v <0~100> | default`');
+    return message.channel.send('`~v <0~100> | default | <0~100> default`');
   }
 
   const volume = parseInt(args[1])
   if (args[1] === 'default') {
-    joinedVoiceConnection.dispatcher.setVolumeLogarithmic(environment.defaultVolume/100);
-    return message.channel.send(`✅ \`Set volume to default ${environment.defaultVolume}\``);
+    joinedVoiceConnection.dispatcher.setVolumeLogarithmic(config.volume/100);
+    return message.channel.send(`✅ \`Set volume to default ${config.volume}\``);
   }
   else if (isNaN(volume) || volume < 0 || volume > 100) {
     return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
   }
   else {
     joinedVoiceConnection.dispatcher.setVolumeLogarithmic(volume/100);
-    return message.channel.send(`✅ \`Set volume to ${volume}\``);
+    if (args[2] === 'default') {  // default update
+      config.volume = volume;
+      return message.channel.send(`✅ \`Set volume to ${volume} as default\``);
+    }
+    else {
+      return message.channel.send(`✅ \`Set volume to ${volume}\``);
+    }
   }
 }
+
+async function loadConfig(message: Message) {
+  try {
+    config = await db.loadConfig();
+    console.info('Load default config successfully')
+    if (message) {
+      message.channel.send(`✅ \`Default config load success\``);
+    }
+  }
+  catch (err) {
+    console.error('Config load failed');
+    if (message) {
+      message.channel.send(`⚠ \`Config load failed\``);
+    }
+  }
+}
+
+async function saveConfig(message: Message) {
+  try {
+    db.saveConfig(config);
+    console.info('Save config successfully')
+    if (message) {
+      message.channel.send(`✅ \`Config save success\``);
+    }
+  }
+  catch (err) {
+    console.error('Config save failed');
+    if (message) {
+      message.channel.send(`⚠ \`Config save failed\``);
+    }
+  }
+}
+
 
 // --- internal
 
@@ -1021,7 +1074,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   if (!queue || joinedVoiceConnection === null) {
-    queue = new SongQueue(message.channel, [], environment.defaultVolume, true);
+    queue = new SongQueue(message.channel, [], config.volume, true);
 
     addToPlaylist(song);
 

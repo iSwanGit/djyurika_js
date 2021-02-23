@@ -6,3 +6,4 @@ export * from './youtube';
 export * from './MoveRequest';
 export * from './LeaveRequest';
 export * from './UpdatedVoiceState';
+export * from './Config';
