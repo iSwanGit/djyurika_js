@@ -34,7 +34,8 @@ const helpCmdMod = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~m`: 재생목록 순서 변경\n' + 
 '`~d`: 재생목록에서 곡 삭제\n' + 
 '`~c`: 재생목록 비우기\n' + 
-'`~move`: 음성 채널 이동\n';
+'`~move`: 음성 채널 이동\n' + 
+'`~v`: 음량 조정\n';
 const helpCmdDev = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~q`: 대기열 정보\n' +
 '`~np`: 현재 곡 정보\n' +
@@ -44,7 +45,10 @@ const helpCmdDev = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~m`: 재생목록 순서 변경\n' + 
 '`~d`: 재생목록에서 곡 삭제\n' + 
 '`~c`: 재생목록 비우기\n' + 
-'`~move`: 음성 채널 이동\n';
+'`~move`: 음성 채널 이동\n' + 
+'`~v`: 음량 조정\n' + 
+'`~cl`: 기본 설정값 로드\n' + 
+'`~cs`: 설정값 저장\n';
 
 const searchResultMsgs = new Map<string, SearchResult>(); // string: message id
 const moveRequestList = new Map<string, MoveRequest>();  // string: message id
@@ -155,13 +159,13 @@ client.on('message', async message => {
       break;
 
     case 'cl':
-      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+      if (checkDeveloperRole(message.member)) {
         loadConfig(message);
       }
       break;
 
     case 'cs':
-      if (checkModeratorRole(message.member) || checkDeveloperRole(message.member)) {
+      if (checkDeveloperRole(message.member)) {
         saveConfig(message);
       }
       break;
@@ -520,7 +524,7 @@ function skip(message: Discord.Message) {
 }
 
 async function nowPlaying(message: Discord.Message) {
-  if (!queue || queue.songs.length === 0 || !queue.playing || !joinedVoiceConnection || !joinedVoiceConnection.dispatcher) {
+  if (!queue || queue.songs.length === 0 || !joinedVoiceConnection || !joinedVoiceConnection.dispatcher) {
     return;
   }
 
@@ -751,7 +755,7 @@ async function requestStop(message: Discord.Message) {
 
 async function requestMove(message: Discord.Message) {
   // check DJ Yurika joined voice channel
-  if (!joinedVoiceConnection || !queue || queue.songs.length === 0 || !queue.playing) {
+  if (!joinedVoiceConnection || !queue || queue.songs.length === 0) {
     return;
   }
 
@@ -858,6 +862,8 @@ async function loadConfig(message: Message) {
     console.info('Load default config successfully')
     if (message) {
       message.channel.send(`✅ \`Default config load success\``);
+      // apply to current song playing
+      joinedVoiceConnection.dispatcher.setVolumeLogarithmic(config.volume/100);
     }
   }
   catch (err) {
@@ -944,7 +950,7 @@ async function play(guild: Discord.Guild, song: Song) {
       '```');
       console.error(error);
     });
-  dispatcher.setVolumeLogarithmic(queue.volume / 100);
+  dispatcher.setVolumeLogarithmic(config.volume / 100);
 
   db.increasePlayCount(song.id);
   db.fillEmptySongInfo(song.id, song.title);
@@ -1074,7 +1080,7 @@ async function playRequest(message: Discord.Message, user: Discord.User, url: st
   console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   if (!queue || joinedVoiceConnection === null) {
-    queue = new SongQueue(message.channel, [], config.volume, true);
+    queue = new SongQueue(message.channel, []);
 
     addToPlaylist(song);
 
