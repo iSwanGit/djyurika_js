@@ -561,10 +561,13 @@ function getQueue(message: Discord.Message) {
   }
 
   const guildName = message.guild.name;
-  let queueData = '';
+  let queueData: string[] = [];
   const currentSong = queue.songs[0];
   queue.songs.slice(1).forEach((song, index) => {
-    queueData += `${index+1}. [${song?.title}](${song?.url})\n`;
+    if (!queueData[Math.trunc(index / 10)]) {
+      queueData[Math.trunc(index / 10)] = '';
+    }
+    queueData[Math.trunc(index / 10)] += `${index+1}. [${song?.title}](${song?.url})\n`;
   });
 
   const embedMessage = new Discord.MessageEmbed()
@@ -579,11 +582,17 @@ function getQueue(message: Discord.Message) {
       },
       {
         name: '대기열',
-        value: queueData || '없음 (다음 곡 랜덤 재생)',
+        value: queueData[0] || '없음 (다음 곡 랜덤 재생)',
         inline: false,
       },
     );
   
+  if (queueData.length > 1) {
+    for (let q of queueData.slice(1)) {
+      embedMessage.addField('\u200B', q, false);
+    }
+  }
+
   return message.channel.send(embedMessage);
 }
 
