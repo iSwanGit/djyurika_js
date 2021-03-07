@@ -7,3 +7,5 @@ export * from './MoveRequest';
 export * from './LeaveRequest';
 export * from './UpdatedVoiceState';
 export * from './Config';
+export * from './BotConnection';
+export * from './ServerOption';

@@ -1,19 +1,25 @@
 import { GuildMember } from 'discord.js';
 import request from 'request-promise-native';
 import { environment, keys } from './config';
-import { YoutubeSearch } from './types/youtube/youtubesearch';
+import { ServerOption, YoutubeSearch } from './types';
 
 export function fillZeroPad(num: number, width: number) {
   const n = num + '';
   return n.length >= width ? n : new Array(width - n.length + 1).join('0') + n;
 }
 
-export function checkDeveloperRole(member: GuildMember) {
-  return member.roles.cache.find(role => role.id === environment.developerRoleID);
+export function checkDeveloperRole(member: GuildMember, opt: ServerOption) {
+  return member.roles.cache.find(role => {    
+    if (!opt.developerRoleID) return true;  // undefined always pass
+    return role?.id === opt.developerRoleID;
+  });
 }
 
-export function checkModeratorRole(member: GuildMember) {
-  return member.roles.cache.find(role => role.id === environment.moderatorRoleID);
+export function checkModeratorRole(member: GuildMember, opt: ServerOption) {
+  return member.roles.cache.find(role => {
+    if (!opt.moderatorRoleID) return true;  // undefined always pass
+    return role?.id === opt.moderatorRoleID;
+  });
 }
 
 export async function getYoutubeSearchList(keyword: string): Promise<YoutubeSearch> {

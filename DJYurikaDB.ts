@@ -21,10 +21,10 @@ class DJYurikaDB {
     catch (err) { console.error(err); }
   }
 
-  public async loadConfig() {
+  public async loadConfig(server: string) {
     try {
       const conn = await this.pool.getConnection();
-      const config = (await conn.query(`SELECT * FROM config LIMIT 1`))[0] as Config;
+      const config = (await conn.query(`SELECT volume FROM config WHERE server = ?`, server))[0] as Config;
       
       conn.end();
       return config;
@@ -32,13 +32,20 @@ class DJYurikaDB {
     catch (err) { console.error(err); throw err; }
   }
 
-  public async saveConfig(config: Config) {
+  public async saveConfig(config: Config, server: string) {
     try {
       const conn = await this.pool.getConnection();
-
-      // update each attribute of DBConfig
-      conn.query('UPDATE config SET volume = ?', config.volume)
-        .then(() => conn.end());
+      const exist = (await conn.query(`SELECT COUNT(*) as exist FROM config WHERE server = ?`, server))[0].exist;
+      if (exist) {
+        // update each attribute of DBConfig
+        conn.query('UPDATE config SET volume = ? WHERE server = ?', [config.volume, server])
+          .then(() => conn.end());
+      }
+      else {
+        // create
+        conn.query('INSERT INTO config (server, volume) VALUES (?, ?)', [server, config.volume])
+          .then(() => conn.end());
+      }
     }
     catch (err) { console.error(err); }
   }
