@@ -840,7 +840,7 @@ function clearQueue(message: Message, conn: BotConnection) {
 }
 
 function changeVolume(message: Message, conn: BotConnection) {
-  if (!conn.joinedVoiceConnection) return;
+  if (!conn.joinedVoiceConnection || !conn.joinedVoiceConnection.dispatcher) return;
 
   const args = message.content.split(' ');
   if (args.length < 2) {
