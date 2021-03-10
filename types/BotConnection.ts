@@ -9,6 +9,9 @@ export class BotConnection {
   intervalHandler: NodeJS.Timeout;
   config: Config;
 
+  songStartTimestamp: number;
+  skipFlag = false;
+
   searchResultMsgs = new Map<string, SearchResult>(); // string: message id
   moveRequestList = new Map<string, MoveRequest>();  // string: message id
   leaveRequestList = new Map<string, LeaveRequest>();  // string: message id

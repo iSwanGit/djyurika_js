@@ -534,6 +534,7 @@ function skip(message: Discord.Message, conn: BotConnection) {
     return; // message.channel.send('There is no song that I could skip!');
   
   // 큐 변경 중 shift 일어날 경우 undefined에러 발생, ?로 객체 존재여부 확인 추가
+  conn.skipFlag = true;
   console.log(`[${message.guild.name}] ` + `건너 뜀: ${conn.queue.songs[0]?.title}`);
   message.channel.send(`⏭ \`건너뛰기: ${conn.queue.songs[0]?.title}\``);
   if (conn.joinedVoiceConnection && conn.joinedVoiceConnection.dispatcher) {
@@ -990,6 +991,11 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
     .play(await ytdl(song.url), { type: 'opus' })
     .on("finish", () => {
       console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+      const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+      if (song.duration > playedTime && !conn.skipFlag) {
+        console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+      }
+      conn.skipFlag = false;  // reset flag
       conn.recentNowPlayingMessage = null;
       conn.queue.songs.shift();
       play(guild, conn.queue.songs[0], conn);
@@ -1006,6 +1012,7 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
   db.increasePlayCount(song.id);
   db.fillEmptySongInfo(song.id, song.title);
 
+  conn.songStartTimestamp = Date.now();
   console.log(`[${guild.name}] ` + `재생: ${song.title}`);
   // client.user.setActivity(song.title, { type: 'LISTENING' });
   conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
