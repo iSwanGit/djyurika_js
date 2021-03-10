@@ -918,7 +918,6 @@ async function saveConfig(message: Message, conn: BotConnection) {
 }
 
 function calculatePing(message: Message) {
-  console.log(new Date(Date.now()) + ' ' + new Date(message.createdTimestamp));
   const receiveLatency = Date.now() - message.createdTimestamp;
   const apiLatency = Math.round(client.ws.ping);
   
