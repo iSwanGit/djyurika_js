@@ -174,6 +174,10 @@ client.on('message', async message => {
       }
       break;
 
+    case 'ping':
+      calculatePing(message);
+      break;
+
     default:
       message.channel.send('사용법: `~h`');
       break;
@@ -910,6 +914,26 @@ async function saveConfig(message: Message, conn: BotConnection) {
   }
 }
 
+function calculatePing(message: Message) {
+  console.log(new Date(Date.now()) + ' ' + new Date(message.createdTimestamp));
+  const receiveLatency = Date.now() - message.createdTimestamp;
+  const apiLatency = Math.round(client.ws.ping);
+  
+  message.channel.send('🏓 `Calculating...`').then(msg => {
+    msg.delete();
+
+    const totalLatency = msg.createdTimestamp - message.createdTimestamp;
+    const pingMessage = `⌛ response: \`${totalLatency}ms\` \n`
+      + `⏱ receive: \`${receiveLatency}ms\` \n`
+      + `💓 API heartbeat: \`${apiLatency}ms\` \n`;
+    const embedMessage = new Discord.MessageEmbed()
+      .setTitle('🏓 Ping via message')
+      .setDescription(pingMessage)
+      .setColor('#ACF6CA');
+
+    message.channel.send(embedMessage);
+  });
+}
 
 // --- internal
 
