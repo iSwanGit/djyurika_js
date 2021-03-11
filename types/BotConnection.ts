@@ -11,6 +11,7 @@ export class BotConnection {
 
   songStartTimestamp: number;
   skipFlag = false;
+  loopFlag = false;
 
   searchResultMsgs = new Map<string, SearchResult>(); // string: message id
   moveRequestList = new Map<string, MoveRequest>();  // string: message id
