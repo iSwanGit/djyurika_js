@@ -5,7 +5,7 @@ import ytpl from 'ytpl';
 import consoleStamp from 'console-stamp';
 
 import { environment, keys } from './config';
-import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, MoveRequest, SearchError, SearchResult, ServerOption, Song, SongQueue, UpdatedVoiceState, YoutubeSearch } from './types';
+import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, SearchError, SearchResult, ServerOption, Song, SongQueue, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import DJYurikaDB from './DJYurikaDB';
 
@@ -27,6 +27,7 @@ const helpCmd = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~s`: 건너뛰기\n' +
 '`~l`: 채널에서 봇 퇴장\n' + 
 '`~loop`: 현재 곡 반복/해제\n' + 
+'`~loopq`: 현재 재생목록 반복/해제\n' + 
 '`~move`: 음성 채널 이동 요청\n' +
 '`~ping`: 지연시간 측정(메시지)\n';
 const helpCmdMod = '`~p 음악`: 유튜브에서 영상 재생\n' +
@@ -35,6 +36,7 @@ const helpCmdMod = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~s`: 건너뛰기\n' +
 '`~l`: 채널에서 봇 퇴장\n' + 
 '`~loop`: 현재 곡 반복/해제\n' + 
+'`~loopq`: 현재 재생목록 반복/해제\n' + 
 '`~m`: 재생목록 순서 변경\n' + 
 '`~d`: 재생목록에서 곡 삭제\n' + 
 '`~c`: 재생목록 비우기\n' + 
@@ -48,6 +50,7 @@ const helpCmdDev = '`~p 음악`: 유튜브에서 영상 재생\n' +
 '`~s`: 건너뛰기\n' +
 '`~l`: 채널에서 봇 퇴장\n' + 
 '`~loop`: 현재 곡 반복/해제\n' + 
+'`~loopq`: 현재 재생목록 반복/해제\n' + 
 '`~m`: 재생목록 순서 변경\n' + 
 '`~d`: 재생목록에서 곡 삭제\n' + 
 '`~c`: 재생목록 비우기\n' + 
@@ -134,7 +137,11 @@ client.on('message', async message => {
       break;
 
     case 'loop':
-      setLoop(message, conn);
+      setLoop(message, conn, LoopType.SINGLE);
+      break;
+    
+    case 'loopq':
+      setLoop(message, conn, LoopType.LIST);
       break;
 
     case 'npid':
@@ -578,8 +585,8 @@ function skip(message: Discord.Message, conn: BotConnection) {
   conn.skipFlag = true;
   console.log(`[${message.guild.name}] ` + `건너 뜀: ${conn.queue.songs[0]?.title}`);
   message.channel.send(`⏭ \`건너뛰기: ${conn.queue.songs[0]?.title}\``);
-  if (conn.loopFlag) {
-    conn.loopFlag = false;
+  if (conn.loopFlag === LoopType.SINGLE) {
+    conn.loopFlag = LoopType.NONE;
     message.channel.send('🔂 `한곡 반복 해제됨`');
   }
   if (conn.joinedVoiceConnection && conn.joinedVoiceConnection.dispatcher) {
@@ -652,7 +659,16 @@ function getQueue(message: Discord.Message, conn: BotConnection) {
     queueData[Math.trunc(index / 10)] += `${index+1}. [${song?.title}](${song?.url})\n`;
   });
 
-  const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + (conn.loopFlag ? ' *(반복재생 켜짐)' : '');
+  let loopStr = '';
+  switch (conn.loopFlag) {
+    case LoopType.SINGLE:
+      loopStr = ' *(한곡 반복 켜짐)';
+      break;
+    case LoopType.LIST:
+      loopStr = ' *(리스트 반복 켜짐)';
+      break;
+  }
+  const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + loopStr;
   const embedMessage = new Discord.MessageEmbed()
     .setAuthor(`${guildName}의 재생목록`, message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
     .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
@@ -985,7 +1001,7 @@ function calculatePing(message: Message) {
   });
 }
 
-function setLoop(message: Message, conn: BotConnection) {
+function setLoop(message: Message, conn: BotConnection, type: LoopType) {
   const voiceState = message.guild.me.voice;
   const voiceChannel = voiceState?.channel;
   if (!conn.queue || conn.queue.songs.length === 0) {
@@ -997,12 +1013,25 @@ function setLoop(message: Message, conn: BotConnection) {
     return;
   }
 
-  conn.loopFlag = !conn.loopFlag;
-  if (conn.loopFlag) {
-    return message.channel.send('🔂 `한곡 반복 설정`');
+  if (conn.loopFlag === type) {
+    conn.loopFlag = LoopType.NONE;
+    return message.channel.send('➡ `반복 해제`');
   }
   else {
-    return message.channel.send('🔂 `반복 해제`');
+    conn.loopFlag = type;
+    switch (conn.loopFlag) {
+      case LoopType.NONE:
+        return message.channel.send('➡ `반복 해제`');  // may not reach to this line
+
+      case LoopType.SINGLE:
+        return message.channel.send('🔂 `한곡 반복 설정`');
+  
+      case LoopType.LIST:
+        return message.channel.send('🔁 `현재 리스트 반복 설정`');
+  
+      default:
+        break;
+    }
   }
 }
 
@@ -1018,7 +1047,7 @@ function onDisconnect(conn: BotConnection) {
   conn.joinedVoiceConnection = null;
   conn.channelJoinRequestMember = null;
   conn.recentNowPlayingMessage = null;
-  conn.loopFlag = false;
+  conn.loopFlag = LoopType.NONE;
   conn.skipFlag = false;
   // client.user.setActivity();
   clearInterval(conn.intervalHandler);
@@ -1087,11 +1116,16 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
       }
       conn.skipFlag = false;  // reset flag
       conn.recentNowPlayingMessage = null;
-      if (!conn.loopFlag) {
-        conn.queue.songs.shift();
-      }
-      else {
-        console.info(`[${guild.name}] ` + `반복재생 설정 중`);
+      switch (conn.loopFlag) {
+        case LoopType.LIST:
+          conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+        case LoopType.NONE:
+          conn.queue.songs.shift();
+          console.info(`[${guild.name}] ` + `반복재생 설정 중`);
+          break;
+        
+        case LoopType.SINGLE:
+          break;
       }
       play(guild, conn.queue.songs[0], conn);
     })

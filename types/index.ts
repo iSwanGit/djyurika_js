@@ -10,3 +10,4 @@ export * from './Config';
 export * from './BotConnection';
 export * from './ServerOption';
 export * from './AddPlaylistConfirmList';
+export * from './LoopType';
