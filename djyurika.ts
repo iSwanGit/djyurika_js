@@ -499,14 +499,9 @@ function sendHelp(message: Discord.Message) {
   }
 
   const embedMessage = new Discord.MessageEmbed()
-    .setAuthor('사용법', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
+    .setAuthor('사용법', message.guild.me.user.avatarURL(), environment.githubRepoUrl)
     .setColor('#ffff00')
     .addFields(
-      {
-        name: 'Version 2 새 기능',
-        value: '1. 특정 음성채널로 소환\n' +
-        '2. 키워드 검색\n'
-      },
       {
         name: cmdName,
         value: cmdValue,
@@ -891,7 +886,9 @@ function changeVolume(message: Message, conn: BotConnection) {
 
   const args = message.content.split(' ');
   if (args.length < 2) {
-    return message.channel.send('`~v <0~100> | default | <0~100> default`');
+    message.channel.send('`~v <0~100> | default | <0~100> default`');
+    message.channel.send(`🔊 volume: \`${conn.config.volume}\`/\`100\``);
+    return;
   }
 
   const volume = parseInt(args[1])

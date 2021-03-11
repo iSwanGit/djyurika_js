@@ -3,6 +3,7 @@ export const environment = {
   defaultConfig: {
     volume: 35,
   },
+  githubRepoUrl: 'https://github.com/MikuWallets/djyurika_js',
   
   serverOptions: [
     {
