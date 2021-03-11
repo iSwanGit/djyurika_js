@@ -1,4 +1,4 @@
-import Discord, { DMChannel, Message, MessageEmbed, NewsChannel, TextChannel } from 'discord.js';
+import Discord, { DMChannel, Guild, Message, MessageEmbed, NewsChannel, TextChannel } from 'discord.js';
 import ytdl from 'ytdl-core-discord';
 import ytdlc from 'ytdl-core';  // for using type declaration
 import ytpl from 'ytpl';
@@ -1001,44 +1001,46 @@ function onDisconnect(conn: BotConnection) {
 }
 
 async function addToPlaylist(song: Song, conn: BotConnection) {
-  console.log(`[${conn.joinedVoiceConnection.channel.guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
+  const guild = conn.joinedVoiceConnection.channel.guild;  // voice connection 전제상황
+  console.log(`[${guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
   conn.queue.songs.push(song);
 
   // db check
-  const exist = await db.checkSongRegistered(song.id);
+  const exist = await db.checkSongRegistered(song.id, guild.id);
   if (!exist) {
-    await db.addSong(song); // include incresing pick count
-    console.info(`[${conn.joinedVoiceConnection.channel.guild.name}] Add song to DB: ${song.id}`);  
+    await db.addSong(song, guild.id); // include incresing pick count
+    console.info(`[${guild.name}] Add song to DB: ${song.id}`);  
   }
   else {
-    db.increasePickCount(song.id);
+    db.increasePickCount(song.id, guild.id);
   }
 }
 
 async function addSongListToPlaylist(songs: Song[], conn: BotConnection) {
+  const guild = conn.joinedVoiceConnection.channel.guild;  // voice connection 전제상황
   console.log(`[${conn.joinedVoiceConnection.channel.guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
   let dbAddedSongsStr = '';
   let dbAddedSongsCnt = 0;
   for (const song of songs) {
     conn.queue.songs.push(song);
     // db check
-    const exist = await db.checkSongRegistered(song.id);
+    const exist = await db.checkSongRegistered(song.id, guild.id);
     if (!exist) {
-      await db.addSong(song); // include incresing pick count
+      await db.addSong(song, guild.id); // include incresing pick count
       dbAddedSongsStr += `${song.id} `;
       ++dbAddedSongsCnt;
     }
     else {
-      db.increasePickCount(song.id);
+      db.increasePickCount(song.id, guild.id);
     }
   }
-  console.info(`[${conn.joinedVoiceConnection.channel.guild.name}] Add ${dbAddedSongsCnt} song(s) to DB: ${dbAddedSongsStr}`);  
+  console.info(`[${guild.name}] Add ${dbAddedSongsCnt} song(s) to DB: ${dbAddedSongsStr}`);  
 }
 
 async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {  
   // Yurika Random
   if (!song) {
-    song = await selectRandomSong();
+    song = await selectRandomSong(guild);
     conn.queue.songs.push(song);
     console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
   }
@@ -1065,7 +1067,7 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
     });
   dispatcher.setVolumeLogarithmic(conn.config.volume / 100);
 
-  db.increasePlayCount(song.id);
+  db.increasePlayCount(song.id, guild.id);
   db.fillEmptySongInfo(song.id, song.title);
 
   conn.songStartTimestamp = Date.now();
@@ -1074,8 +1076,8 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
   conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
 }
 
-async function selectRandomSong(): Promise<Song> {
-  const randId = await db.getRandomSongID();
+async function selectRandomSong(guild: Guild): Promise<Song> {
+  const randId = await db.getRandomSongID(guild.id);
   try {
     const randSong = await getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randId);
     const song = new Song(
@@ -1095,7 +1097,7 @@ async function selectRandomSong(): Promise<Song> {
     console.error(errMsg);
     console.error('Song id is: ' + randId);
     console.log('Get another random pick');
-    return selectRandomSong();
+    return selectRandomSong(guild);
   }
 }
 
