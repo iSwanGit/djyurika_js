@@ -18,6 +18,12 @@ export const environment = {
       moderatorRoleID: null,
       commandChannelID: '818104757822029865', // dj-yurika-command
     },
+    {
+      serverID: '478916169340813312', // 고양이월드
+      developerRoleID: '819628441838026753',  // Yurika Father
+      moderatorRoleID: null,
+      commandChannelID: '810144835499065344', // 노래신청방
+    },
   ],
 
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
