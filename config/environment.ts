@@ -22,4 +22,5 @@ export const environment = {
 
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
   youtubeUrlPrefix: 'https://www.youtube.com/watch?v=',
+  maxSearchResults: 5,
 }
