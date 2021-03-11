@@ -1,5 +1,5 @@
 import { VoiceConnection, GuildMember, Message } from "discord.js";
-import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList } from ".";
+import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType } from ".";
 
 export class BotConnection {
   queue: SongQueue;
@@ -11,6 +11,7 @@ export class BotConnection {
 
   songStartTimestamp: number;
   skipFlag = false;
+  loopFlag = LoopType.NONE;
 
   searchResultMsgs = new Map<string, SearchResult>(); // string: message id
   moveRequestList = new Map<string, MoveRequest>();  // string: message id
