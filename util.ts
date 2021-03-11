@@ -24,7 +24,7 @@ export function checkModeratorRole(member: GuildMember, opt: ServerOption) {
 
 export async function getYoutubeSearchList(keyword: string): Promise<YoutubeSearch> {
   const apiUrl = `${environment.searchApiUrl}?key=${keys.youtubeApiKey}`
-    + `&part=snippet&type=video&maxResults=5&videoEmbeddable=true`
+    + `&part=snippet&type=video&maxResults=${environment.maxSearchResults}&videoEmbeddable=true`
     + `&q=${keyword}`;
   
   const res = await request(apiUrl).catch((err) => {throw err.error});
