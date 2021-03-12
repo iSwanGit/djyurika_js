@@ -662,10 +662,10 @@ function getQueue(message: Discord.Message, conn: BotConnection) {
   let loopStr = '';
   switch (conn.loopFlag) {
     case LoopType.SINGLE:
-      loopStr = ' *(한곡 반복 켜짐)';
+      loopStr = '\n*(한곡 반복 켜짐)';
       break;
     case LoopType.LIST:
-      loopStr = ' *(리스트 반복 켜짐)';
+      loopStr = '\n*(리스트 반복 켜짐)';
       break;
   }
   const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + loopStr;
