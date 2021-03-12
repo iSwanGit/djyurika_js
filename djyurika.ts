@@ -1095,7 +1095,9 @@ async function addSongListToPlaylist(songs: Song[], conn: BotConnection) {
       db.increasePickCount(song.id, guild.id);
     }
   }
-  console.info(`[${guild.name}] Add ${dbAddedSongsCnt} song(s) to DB: ${dbAddedSongsStr}`);  
+  if (dbAddedSongsCnt) {
+    console.info(`[${guild.name}] Add ${dbAddedSongsCnt} song(s) to DB: ${dbAddedSongsStr}`);
+  }
 }
 
 async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {  
@@ -1456,7 +1458,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
     songs.push(song);
   }
 
-  console.log(`[${message.guild.name}]  플레이리스트 추가: ${playlist.title}(${playlist.author.name}) - ${playlist.estimatedItemCount}곡`);
+  console.log(`[${message.guild.name}] 플레이리스트 추가: ${playlist.title}(${playlist.author.name}) - ${playlist.estimatedItemCount}곡`);
 
   if (!conn.queue || conn.joinedVoiceConnection === null) {
     conn.queue = new SongQueue(message.channel, []);
@@ -1480,7 +1482,38 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
         connections.set(message.guild.id, conn);
       }
 
-      addSongListToPlaylist(songs, conn);
+      await addSongListToPlaylist(songs, conn);
+
+      // notice multiple song add
+      const embedMessage = new Discord.MessageEmbed()
+      .setAuthor('재생목록 추가', user.avatarURL(), playlist.url)
+      .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
+      .setColor('#0000ff')
+      .setThumbnail(playlist.bestThumbnail.url)
+      .addFields(
+        {
+          name: '플레이리스트',
+          value: playlist.title,
+          inline: false
+        },
+        {
+          name: '채널',
+          value: playlist.author.name,
+          inline: true
+        },
+        {
+          name: '곡수',
+          value: playlist.estimatedItemCount,
+          inline: true
+        },
+        {
+          name:   '추가된 시간',
+          value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
+          inline: true,
+        },
+      );
+      message.channel.send(embedMessage);
+
       play(message.guild, conn.queue.songs[0], conn);
     }
     catch (err) {
@@ -1495,7 +1528,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
     }
   } else {
-    addSongListToPlaylist(songs, conn);
+    await addSongListToPlaylist(songs, conn);
 
     // 최초 부른 사용자가 나가면 채워넣기
     if (!conn.channelJoinRequestMember) {
@@ -1535,12 +1568,12 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
       },
       {
         name:   '추가된 시간',
-        value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(this.duration % 60), 2)}`,
+        value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
         inline: true,
       },
       {
-        name:   '대기열 (마지막 곡)',
-        value:  conn.queue.songs.length - 1,
+        name:   '대기열 (첫번째 곡)',
+        value:  conn.queue.songs.length - playlist.estimatedItemCount,
         inline: true,
       },
     );
