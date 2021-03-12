@@ -250,20 +250,19 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
 
   selectedMsg = conn.searchResultMsgs.get(reaction.message.id);
   if (selectedMsg) {
-    // music select
+    // check requested user is in voice channel
+    const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
+    if (!voiceChannel) {
+      reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
+      return;
+    }
 
     //  except developer or moderator
     if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
-      const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
       // requested user only
       if (user.id !== selectedMsg.reqUser.id) return;
-      // check requested user is in voice channel
-      if (!voiceChannel) {
-        reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
-        return;
-      }
     }
-  
+
     // cancel
     if (reaction.emoji.name === cancelEmoji) {
       reaction.message.edit('⚠ `검색 취소됨`');
@@ -1113,8 +1112,11 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
     .on("finish", () => {
       console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
       const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-      if (song.duration > playedTime && !conn.skipFlag) {
+      if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
         console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+        (guild.channels.cache.get(serverOptions.get(guild.id).commandChannelID) as TextChannel).send(
+          `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+        );
       }
       conn.skipFlag = false;  // reset flag
       conn.recentNowPlayingMessage = null;
