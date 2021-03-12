@@ -115,7 +115,7 @@ client.on('message', async message => {
   }
 
 
-  switch (cmd) {
+  switch (cmd.toLowerCase()) {
     case 'p':
       execute(message, conn);
       break;
