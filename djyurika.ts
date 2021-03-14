@@ -1414,7 +1414,7 @@ async function playlistParseResult(conn: BotConnection, message: Discord.Message
     },
     {
       name: '채널',
-      value: playlist.author.name,
+      value: playlist.author ? playlist.author.name : playlist.items[0].author.name,
       inline: true
     },
     {
@@ -1460,7 +1460,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
     songs.push(song);
   }
 
-  console.log(`[${message.guild.name}] 플레이리스트 추가: ${playlist.title}(${playlist.author.name}) - ${playlist.estimatedItemCount}곡`);
+  console.log(`[${message.guild.name}] 플레이리스트 추가: ${playlist.title}(${playlist.author ? playlist.author.name : playlist.items[0].author.name}) - ${playlist.estimatedItemCount}곡`);
 
   if (!conn.queue || conn.joinedVoiceConnection === null) {
     conn.queue = new SongQueue(message.channel, []);
@@ -1500,7 +1500,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
         },
         {
           name: '채널',
-          value: playlist.author.name,
+          value: playlist.author ? playlist.author.name : playlist.items[0].author.name,
           inline: true
         },
         {
@@ -1560,7 +1560,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
       },
       {
         name: '채널',
-        value: playlist.author.name,
+        value: playlist.author ? playlist.author.name : playlist.items[0].author.name,
         inline: true
       },
       {
