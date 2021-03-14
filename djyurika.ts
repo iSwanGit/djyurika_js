@@ -1401,7 +1401,7 @@ async function playlistParseResult(conn: BotConnection, message: Discord.Message
   }
 
   const embedMessage = new MessageEmbed()
-  .setAuthor('유튜브 플레이리스트 감지됨', playlist.author.bestAvatar.url, playlist.url)
+  .setAuthor('유튜브 플레이리스트 감지됨', playlist.author?.bestAvatar.url, playlist.url)
   .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
   .setColor('#FFC0CB')
   .setThumbnail(playlist.bestThumbnail.url)
