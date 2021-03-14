@@ -25,6 +25,12 @@ export const environment = {
       moderatorRoleID: null,
       commandChannelID: '810144835499065344', // 노래신청방
     },
+    {
+      serverID: '720598754398568568', // 오동석(psy)
+      developerRoleID: null,
+      moderatorRoleID: null,
+      commandChannelID: '720598754398568572', // 일반
+    },
   ],
 
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
