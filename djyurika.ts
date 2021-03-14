@@ -1388,6 +1388,7 @@ async function playlistParseResult(conn: BotConnection, message: Discord.Message
   }
   catch (err) {
     console.error(`[${message.guild.name}] ${err.message}`);
+    message.channel.send(`⚠ \`${err.message}\``);
     console.log(`[${message.guild.name}] Failed parse playlist, try parse as link`)
     playRequest(conn, message, user, url, msgId); // pass if parse failed
     return;
