@@ -1123,12 +1123,13 @@ async function play(guild: Discord.Guild, song: Song, conn: BotConnection) {
       switch (conn.loopFlag) {
         case LoopType.LIST:
           conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-          console.info(`[${guild.name}] ` + `반복재생 설정 중`);
+          console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
         case LoopType.NONE:
           conn.queue.songs.shift();
           break;
         
         case LoopType.SINGLE:
+          console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
           break;
       }
       play(guild, conn.queue.songs[0], conn);
