@@ -1,3 +1,5 @@
+import { SongSource } from "./SongSource";
+
 export class Song {
   id: string;
   title: string;
@@ -6,6 +8,7 @@ export class Song {
   thumbnail: string;
   duration: number;
   requestUserId: string;
+  source: SongSource;
 
   constructor(
     id?: string,
@@ -14,7 +17,8 @@ export class Song {
     channel?: string,
     thumbnail?: string,
     duration?: number,
-    requestUserId?: string
+    requestUserId?: string,
+    source?: SongSource,
     ) {
       this.id = id;
       this.title = title;
@@ -23,6 +27,7 @@ export class Song {
       this.thumbnail = thumbnail;
       this.duration = duration;
       this.requestUserId = requestUserId;
+      this.source = source;
     }
 
   get durationH() {
