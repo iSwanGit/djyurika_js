@@ -9,7 +9,7 @@ import { environment, keys } from './config';
 import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, SearchError, SearchResult, ServerOption, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import DJYurikaDB from './DJYurikaDB';
-import { TrackInfo } from 'soundcloud-downloader/src/info';
+import { SetInfo, TrackInfo } from 'soundcloud-downloader/src/info';
 
 consoleStamp(console, {
   pattern: 'yyyy/mm/dd HH:MM:ss.l',
@@ -393,7 +393,14 @@ client.on('messageReactionAdd', async (reaction: Discord.MessageReaction, user: 
     }
     // accept
     else if (reaction.emoji.name === acceptEmoji) {
-      playRequestList(conn, reaction.message, user, selectedMsg.playlist, reaction.message.id);
+      switch (selectedMsg.provider) {
+        case SongSource.YOUTUBE:
+          playYoutubeRequestList(conn, reaction.message, user, selectedMsg.playlist as ytpl.Result, reaction.message.id);
+          break;
+        case SongSource.SOUNDCLOUD:
+          playSoundcloudRequestList(conn, reaction.message, user, selectedMsg.playlist as SetInfo, reaction.message.id);
+          break;
+      }
       conn.searchResultMsgs.delete(reaction.message.id);
     }
   }
@@ -530,7 +537,7 @@ async function execute(message: Discord.Message, conn: BotConnection) {
   const args = message.content.split(' ');
 
   if (args.length < 2) {
-    return message.channel.send('`~p <song_link>` or `~p <keyword_youtube_only>`');
+    return message.channel.send('`~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
   }
 
   // Developer/Moderator skip voice check when music playing
@@ -567,9 +574,13 @@ async function execute(message: Discord.Message, conn: BotConnection) {
       }
       break;
     case SongSource.SOUNDCLOUD:
-      // todo
-      // single link
-      playSoundcloudRequest(conn, message, message.author, arg, id);
+      if (scdl.isPlaylistURL(arg)) {
+        // todo
+        parseSoundcloudPlaylist(conn, message, message.author, arg, id);
+      }
+      else {
+        playSoundcloudRequest(conn, message, message.author, arg, id);
+      }
       break;
     
     default:
@@ -1261,7 +1272,7 @@ async function selectRandomSong(guild: Guild): Promise<Song> {
           randSong.id.toString(),
           randSong.title,
           randSong.permalink_url,
-          randSong.user?.full_name,
+          randSong.user.username,
           randSong.artwork_url,
           Math.round(randSong.full_duration / 1000),
           client.user.id,
@@ -1355,6 +1366,10 @@ async function getSoundcloudSongInfoByID(id: number) {
   return (await scdl.getTrackInfoByID([id]))[0];
 }
 
+async function getSoundcloudPlaylistInfo(url: string) {
+  return await scdl.getSetInfo(url);
+}
+
 async function playSoundcloudRequest(conn: BotConnection, message: Discord.Message, user: Discord.User, url: string, msgId: string) {
   let reqMember = message.guild.members.cache.get(user.id);
   let voiceChannel = message.member.voice.channel;
@@ -1382,13 +1397,13 @@ async function playSoundcloudRequest(conn: BotConnection, message: Discord.Messa
     songInfo.id.toString(),
     songInfo.title,
     songInfo.permalink_url,
-    songInfo.user?.full_name,
+    songInfo.user.username,
     songInfo.artwork_url,
     Math.round(songInfo.full_duration / 1000),
     user.id,
     SongSource.SOUNDCLOUD,
     );
-  console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
+  console.log(`검색된 SoundCloud 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   playProcess(conn, message, user, song, msgId);
 }
@@ -1420,19 +1435,178 @@ async function playYoutubeRequest(conn: BotConnection, message: Discord.Message,
     user.id,
     SongSource.YOUTUBE,
     );
-  console.log(`검색된 영상: ${song.title} (${song.id}) (${song.duration}초)`);
+  console.log(`검색된 YouTube 영상: ${song.title} (${song.id}) (${song.duration}초)`);
 
   playProcess(conn, message, user, song, msgId);
 }
 
-async function parseYoutubePlaylist(conn: BotConnection, message: Discord.Message, user: Discord.User, url: string, msgId: string) {
+async function playProcess(conn: BotConnection, message: Discord.Message, user: Discord.User, song: Song, msgId: string) {
   let reqMember = message.guild.members.cache.get(user.id);
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
   if (!voiceChannel) {
     voiceChannel = reqMember.voice.channel;
   }
+  
+  if (!conn.queue || conn.joinedVoiceConnection === null) {
+    conn.queue = new SongQueue(message.channel, []);
 
+    try {
+      // Voice connection
+      loadConfig(message, conn);
+
+      console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
+      message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
+      
+      var connection = await voiceChannel.join();
+      connection.on('disconnect', () => {
+        onDisconnect(conn);
+      });
+      console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
+      conn.joinedVoiceConnection = connection;
+      conn.channelJoinRequestMember = reqMember;
+
+      if (!connections.has(message.guild.id)) {
+        connections.set(message.guild.id, conn);
+      }
+
+      addToPlaylist(song, conn);
+      play(message.guild, conn.queue.songs[0], conn);
+    }
+    catch (err) {
+      console.log(err);
+      conn.queue = null;
+      return message.channel.send('```cs\n'+
+      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+      `${err}`+
+      '```');
+    }
+    finally {
+      message.channel.messages.fetch(msgId).then(msg => msg.delete());
+    }
+  } else {
+    addToPlaylist(song, conn);
+
+    // 최초 부른 사용자가 나가면 채워넣기
+    if (!conn.channelJoinRequestMember) {
+      conn.channelJoinRequestMember = reqMember;
+      console.info(`[${message.guild.name}] ` + reqMember.displayName + ' is new summoner');
+    }
+
+    message.channel.messages.fetch(msgId).then(msg => msg.delete());
+    
+    if (conn.joinedVoiceConnection.channel.members.size === 1) { // no one
+      // if moderator, developer without voice channel, then ignore
+      if (reqMember.voice.channel) {
+        moveVoiceChannel(conn, null, reqMember, message.channel, reqMember.voice.channel);
+      }
+    }
+
+    const embedMessage = new Discord.MessageEmbed()
+    .setAuthor('재생목록 추가', user.avatarURL(), song.url)
+    .setColor('#0000ff')
+    .setDescription(`[${song.title}](${song.url})`)
+    .setThumbnail(song.thumbnail)
+    .addFields(
+      {
+        name: '음성채널',
+        value:  conn.joinedVoiceConnection.channel.name,
+        inline: false,
+      },
+      {
+        name: '채널',
+        value:  song.channel,
+        inline: true,
+      },
+      {
+        name:   '길이',
+        value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
+        inline: true,
+      },
+      {
+        name:   '대기열',
+        value:  conn.queue.songs.length - 1,
+        inline: true,
+      },
+    );
+
+    switch (song.source) {
+      case SongSource.YOUTUBE:
+        embedMessage.setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png');
+        break;
+      case SongSource.SOUNDCLOUD:
+        embedMessage.setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png');
+        break;
+    }
+  
+    message.channel.send(embedMessage);
+    
+    // if moderator, developer without voice channel, then ignore
+    if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceConnection.channel.id)) {
+      message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
+    }
+    return;
+  }
+}
+
+async function parseSoundcloudPlaylist(conn: BotConnection, message: Discord.Message, user: Discord.User, url: string, msgId: string) {
+  let playlist: SetInfo;
+  try {
+    playlist = await getSoundcloudPlaylistInfo(url);
+  }
+  catch (err) {
+    console.error(`[${message.guild.name}] ${err.message}`);
+    message.channel.send(`⚠ \`${err.message}\``);
+    console.log(`[${message.guild.name}] Failed parse SoundCloud playlist, try parse as link`)
+    playSoundcloudRequest(conn, message, user, url, msgId); // pass if parse failed
+    return;
+  }
+
+  if (!playlist) {
+    return message.channel.send('```cs\n'+
+      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+      `Error: Parsed playlist is empty`+
+      '```');
+  }
+
+  const embedMessage = new MessageEmbed()
+  .setAuthor('사운드클라우드 플레이리스트 감지됨', playlist.user.avatar_url, playlist.permalink_url)
+  .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
+  .setColor('#FF5500')
+  .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
+  .setDescription(`Requested by <@${message.member.id}>`)
+  .addFields(
+    {
+      name: '플레이리스트',
+      value: (playlist as any).title, // type에 정의 안되어있어서 any강제캐스팅
+      inline: false
+    },
+    {
+      name: '채널',
+      value: playlist.user.username,
+      inline: true
+    },
+    {
+      name: '곡수',
+      value: playlist.track_count,
+      inline: true
+    },
+  );
+  
+  message.channel.messages.fetch(msgId).then(msg => msg.delete());
+  const msg = await message.channel.send(embedMessage);
+  const confirmList = new AddPlaylistConfirmList();
+  confirmList.message = msg;
+  confirmList.reqUser = message.member;
+  confirmList.playlist = playlist;
+  confirmList.provider = SongSource.SOUNDCLOUD;
+  conn.addPlaylistConfirmList.set(msg.id, confirmList);
+
+  msg.react(acceptEmoji);
+  msg.react(cancelEmoji);
+}
+
+async function parseYoutubePlaylist(conn: BotConnection, message: Discord.Message, user: Discord.User, url: string, msgId: string) {
   // get playlist info
   let playlist: ytpl.Result;
   try {
@@ -1441,7 +1615,7 @@ async function parseYoutubePlaylist(conn: BotConnection, message: Discord.Messag
   catch (err) {
     console.error(`[${message.guild.name}] ${err.message}`);
     message.channel.send(`⚠ \`${err.message}\``);
-    console.log(`[${message.guild.name}] Failed parse playlist, try parse as link`)
+    console.log(`[${message.guild.name}] Failed parse YouTube playlist, try parse as link`)
     playYoutubeRequest(conn, message, user, url, msgId); // pass if parse failed
     return;
   }
@@ -1483,13 +1657,14 @@ async function parseYoutubePlaylist(conn: BotConnection, message: Discord.Messag
   confirmList.message = msg;
   confirmList.reqUser = message.member;
   confirmList.playlist = playlist;
+  confirmList.provider = SongSource.YOUTUBE;
   conn.addPlaylistConfirmList.set(msg.id, confirmList);
 
   msg.react(acceptEmoji);
   msg.react(cancelEmoji);
 }
 
-async function playRequestList(conn: BotConnection, message: Discord.Message, user: Discord.User, playlist: ytpl.Result, msgId: string) {
+async function playYoutubeRequestList(conn: BotConnection, message: Discord.Message, user: Discord.User, playlist: ytpl.Result, msgId: string) {
   let reqMember = message.guild.members.cache.get(user.id);
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
@@ -1644,7 +1819,7 @@ async function playRequestList(conn: BotConnection, message: Discord.Message, us
   }
 }
 
-async function playProcess(conn: BotConnection, message: Discord.Message, user: Discord.User, song: Song, msgId: string) {
+async function playSoundcloudRequestList(conn: BotConnection, message: Discord.Message, user: Discord.User, playlist: SetInfo, msgId: string) {
   let reqMember = message.guild.members.cache.get(user.id);
   let voiceChannel = message.member.voice.channel;
   // cannot get channel when message passed via reaction, so use below
@@ -1652,6 +1827,25 @@ async function playProcess(conn: BotConnection, message: Discord.Message, user: 
     voiceChannel = reqMember.voice.channel;
   }
   
+  const songs: Song[] = [];
+  let totalDuration = 0;
+  for (const item of playlist.tracks) {
+    const song = new Song(
+      item.id.toString(),
+      item.title,
+      item.permalink_url,
+      item.user.username,
+      item.artwork_url,
+      Math.round(item.full_duration / 1000),
+      user.id,
+      SongSource.SOUNDCLOUD,
+    );
+    totalDuration += Math.round(item.full_duration / 1000);
+    songs.push(song);
+  }
+
+  console.log(`[${message.guild.name}] 플레이리스트 추가: ${(playlist as any).title}(${playlist.user.username}) - ${playlist.track_count}곡`);
+
   if (!conn.queue || conn.joinedVoiceConnection === null) {
     conn.queue = new SongQueue(message.channel, []);
 
@@ -1674,7 +1868,38 @@ async function playProcess(conn: BotConnection, message: Discord.Message, user: 
         connections.set(message.guild.id, conn);
       }
 
-      addToPlaylist(song, conn);
+      await addSongListToPlaylist(songs, conn);
+
+      // notice multiple song add
+      const embedMessage = new Discord.MessageEmbed()
+      .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
+      .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
+      .setColor('#0000ff')
+      .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
+      .addFields(
+        {
+          name: '플레이리스트',
+          value: (playlist as any).title,
+          inline: false
+        },
+        {
+          name: '채널',
+          value: playlist.user.username,
+          inline: true
+        },
+        {
+          name: '곡수',
+          value: playlist.track_count,
+          inline: true
+        },
+        {
+          name:   '추가된 시간',
+          value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
+          inline: true,
+        },
+      );
+      message.channel.send(embedMessage);
+
       play(message.guild, conn.queue.songs[0], conn);
     }
     catch (err) {
@@ -1689,7 +1914,7 @@ async function playProcess(conn: BotConnection, message: Discord.Message, user: 
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
     }
   } else {
-    addToPlaylist(song, conn);
+    await addSongListToPlaylist(songs, conn);
 
     // 최초 부른 사용자가 나가면 채워넣기
     if (!conn.channelJoinRequestMember) {
@@ -1707,41 +1932,37 @@ async function playProcess(conn: BotConnection, message: Discord.Message, user: 
     }
 
     const embedMessage = new Discord.MessageEmbed()
-    .setAuthor('재생목록 추가', user.avatarURL(), song.url)
+    .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
+    .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
     .setColor('#0000ff')
-    .setDescription(`[${song.title}](${song.url})`)
-    .setThumbnail(song.thumbnail)
+    .setThumbnail(playlist.artwork_url)
     .addFields(
       {
-        name: '음성채널',
-        value:  conn.joinedVoiceConnection.channel.name,
-        inline: false,
+        name: '플레이리스트',
+        value: (playlist as any).title,
+        inline: false
       },
       {
         name: '채널',
-        value:  song.channel,
+        value: playlist.user.username,
+        inline: true
+      },
+      {
+        name: '곡수',
+        value: playlist.track_count,
+        inline: true
+      },
+      {
+        name:   '추가된 시간',
+        value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
         inline: true,
       },
       {
-        name:   '길이',
-        value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
-        inline: true,
-      },
-      {
-        name:   '대기열',
-        value:  conn.queue.songs.length - 1,
+        name:   '대기열 (첫번째 곡)',
+        value:  conn.queue.songs.length - playlist.track_count,
         inline: true,
       },
     );
-
-    switch (song.source) {
-      case SongSource.YOUTUBE:
-        embedMessage.setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png');
-        break;
-      case SongSource.SOUNDCLOUD:
-        embedMessage.setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png');
-        break;
-    }
   
     message.channel.send(embedMessage);
     
@@ -1750,7 +1971,7 @@ async function playProcess(conn: BotConnection, message: Discord.Message, user: 
       message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
     }
     return;
-  }
+  }  
 }
 
 async function moveVoiceChannel(conn: BotConnection, message: Discord.Message, triggeredMember: Discord.GuildMember, commandChannel: TextChannel | DMChannel | NewsChannel, voiceChannel: Discord.VoiceChannel) {
