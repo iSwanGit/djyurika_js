@@ -75,8 +75,7 @@ process.setMaxListeners(0); // release limit (for voicestatechange event handler
 
 // init
 client.once('ready', async () => {
-  // TODO: Reset voice state and activity 
-  // cannot force remove activity from here
+  await client.user.setActivity('Help: ~h', { type: 'PLAYING' });
   console.log('Ready!');
 });
 client.once('reconnecting', () => {
