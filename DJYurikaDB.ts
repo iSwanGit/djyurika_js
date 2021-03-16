@@ -1,6 +1,6 @@
 import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
-import { Config, Song, SongSource } from './types';
+import { Config, Song } from './types';
 import { getRandomInt } from './util';
 
 class DJYurikaDB {

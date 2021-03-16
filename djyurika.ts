@@ -677,10 +677,10 @@ function getQueue(message: Discord.Message, conn: BotConnection) {
   let queueData: string[] = [];
   const currentSong = conn.queue.songs[0];
   conn.queue.songs.slice(1).forEach((song, index) => {
-    if (!queueData[Math.trunc(index / 10)]) {
-      queueData[Math.trunc(index / 10)] = '';
+    if (!queueData[Math.trunc(index / 5)]) {
+      queueData[Math.trunc(index / 5)] = '';
     }
-    queueData[Math.trunc(index / 10)] += `${index+1}. [${song?.title}](${song?.url})\n`;
+    queueData[Math.trunc(index / 5)] += `${index+1}. [${song?.title}](${song?.url})\n`;
   });
 
   let loopStr = '';
