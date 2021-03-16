@@ -1,6 +1,6 @@
 import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
-import { Config, Song } from './types';
+import { Config, Song, SongSource } from './types';
 import { getRandomInt } from './util';
 
 class DJYurikaDB {
@@ -50,10 +50,10 @@ class DJYurikaDB {
     catch (err) { console.error(err); }
   }
 
-  public async checkSongRegistered(id: string, server: string): Promise<boolean> {
+  public async checkSongRegistered(song: Song, server: string): Promise<boolean> {
     try {
       const conn = await this.pool.getConnection();
-      const exist = (await conn.query(`SELECT COUNT(id) as exist FROM playlist WHERE id = ? AND guild = ?`, [id, server]))[0].exist;
+      const exist = (await conn.query(`SELECT COUNT(id) as exist FROM playlist WHERE id = ? AND source = ? AND guild = ?`, [song.id, song.source, server]))[0].exist;
       
       conn.end();
       // console.log(rows);
@@ -70,55 +70,56 @@ class DJYurikaDB {
   public async addSong(song: Song, server: string) {
     try {
       const conn = await this.pool.getConnection();
-      conn.query('INSERT INTO playlist (id, title, createdat, guild) VALUES (?, ?, (SELECT NOW()), ?)', [song.id, song.title, server])
-        .then(async () => await this.increasePickCount(song.id, server))
+      conn.query('INSERT INTO playlist (id, title, createdat, source, guild) VALUES (?, ?, (SELECT NOW()), ?, ?)', [song.id, song.title, song.source, server])
+        .then(async () => await this.increasePickCount(song, server))
         .catch(err => console.error(err))
         .finally(() => conn.end());
     }
     catch (err) { console.error(err); }
   }
 
-  public async getRandomSongID(server: string): Promise<string> {
+  public async getRandomSongID(server: string): Promise<Song> {
     try {
       const conn = await this.pool.getConnection();
-      let idRows: string[] = (await conn.query('SELECT id FROM playlist WHERE guild = ? ORDER BY RAND()', server)).map(value => value.id);
+      let idRows: any = (await conn.query('SELECT id, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
       idRows = idRows.sort(() => 0.5 - Math.random());  // shuffle one more
-      const id = idRows[getRandomInt(0, idRows.length)];
+      const res = idRows[getRandomInt(0, idRows.length)] as Song;
+      const song = new Song(res.id, null, null, null, null, null, null, res.source);
       conn.end();
-      return id;
+      return song;
     }
     catch (err) { console.error(err); }    
   }
 
-  public async increasePlayCount(id: string, server: string) {
+  public async increasePlayCount(song: Song, server: string) {
     try {
       const conn = await this.pool.getConnection();
 
-      const count = (await conn.query('SELECT playcount FROM playlist WHERE id = ? AND guild = ?', [id, server]))[0].playcount;
-      conn.query('UPDATE playlist SET playcount = ?, lastplayedat = (SELECT NOW()) WHERE id = ? AND guild = ?', [count+1, id, server])
+      const count = (await conn.query('SELECT playcount FROM playlist WHERE id = ? AND source = ? AND guild = ?', [song.id, song.source, server]))[0].playcount;
+      conn.query('UPDATE playlist SET playcount = ?, lastplayedat = (SELECT NOW()) WHERE id = ? AND source = ? AND guild = ?', [count+1, song.id, song.source, server])
         .then(() => conn.end());
     }
     catch (err) { console.error(err); }
   }
 
-  public async increasePickCount(id: string, server: string) {
+  public async increasePickCount(song: Song, server: string) {
     try {
       const conn = await this.pool.getConnection();
 
-      const count = (await conn.query('SELECT pickcount FROM playlist WHERE id = ? AND guild = ?', [id, server]))[0].pickcount;
-      conn.query('UPDATE playlist SET pickcount = ? WHERE id = ? AND guild = ?', [count+1, id, server])
+      const count = (await conn.query('SELECT pickcount FROM playlist WHERE id = ? AND source = ? AND guild = ?', [song.id, song.source, server]))[0].pickcount;
+      conn.query('UPDATE playlist SET pickcount = ? WHERE id = ? AND source = ? AND guild = ?', [count+1, song.id, song.source, server])
         .then(() => conn.end());
     }
     catch (err) { console.error(err); }
   }
 
-  public async fillEmptySongInfo(id: string, title: string) {
+  public async fillEmptySongInfo(song: Song) {
     try {
       const conn = await this.pool.getConnection();
 
-      const dbTitle: string = (await conn.query('SELECT title FROM playlist WHERE id = ?', id))[0].title;
-      if (!dbTitle.length || dbTitle !== title) {
-        conn.query('UPDATE playlist SET title = ? WHERE id = ?', [title, id])
+      const dbTitle: string = (await conn.query('SELECT title FROM playlist WHERE id = ? AND source = ?', [song.id, song.source]))[0].title;
+      if (!dbTitle.length || dbTitle !== song.title) {
+        conn.query('UPDATE playlist SET title = ? WHERE id = ? AND source = ?', [song.title, song.id, song.source])
           .then(() => conn.end());
         console.info('Update song title to DB column');
       }
