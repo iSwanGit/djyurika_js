@@ -119,7 +119,7 @@ export class DJYurika {
 
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
-      this.refreshServerName();
+      await this.refreshServerName();
       await this.client.user.setActivity('Help: ~h', { type: 'PLAYING' });
       console.log('Ready!');
     });
@@ -561,16 +561,23 @@ export class DJYurika {
   // -------- function definition -------
 
   private async refreshServerName() {
+    console.log('Refreshing server(guild) info...');
     for (const cfg of this.serverConfigs.values()) {
-      const currentName = this.client.guilds.cache.get(cfg.server).name;
-      if (cfg.name !== currentName) {
-        cfg.name = currentName;
-        this.db.saveConfig(cfg)
-        .then(() => {
-          console.log(`Server config of '${cfg.name}' is updated`);
-        })
-        .catch();
-      }
+      await this.client.guilds.fetch(cfg.server)
+      .then(guild => {
+        const currentName = guild.name;
+        if (cfg.name !== currentName) {
+          cfg.name = currentName;
+          this.db.saveConfig(cfg)
+          .then(() => {
+            console.log(`Server config of '${cfg.name}' is updated`);
+          })
+          .catch();
+        }
+      })
+      .catch(err => {
+        console.error(`${err.name}: ${err.message} (${cfg.server}, ${cfg.name})`);
+      });
     }
   }
 
