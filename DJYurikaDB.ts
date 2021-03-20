@@ -3,7 +3,7 @@ import { keys } from './config';
 import { Config, Song } from './types';
 import { getRandomInt } from './util';
 
-class DJYurikaDB {
+export class DJYurikaDB {
   private pool: Pool;
   // private songList: Array<DBSong>;
 
@@ -14,6 +14,7 @@ class DJYurikaDB {
   private async init() {
     try {
       this.pool = await createPool(keys.dbServer);
+      console.log('DB pool created')
       // const conn = await this.pool.getConnection();
       // this.songList = await conn.query("SELECT * FROM playlist");
       // conn.end();
@@ -21,13 +22,32 @@ class DJYurikaDB {
     catch (err) { console.error(err); }
   }
 
-  public async loadConfig(server: string) {
+  public async waitAndCheckPoolCreated() {
+    if (!this.pool) {
+      setTimeout(() => {
+        this.waitAndCheckPoolCreated();
+      }, 100);
+    }
+  }
+
+  public async loadConfig(server: string): Promise<Config> {
     try {
       const conn = await this.pool.getConnection();
       const config = (await conn.query(`SELECT volume FROM config WHERE server = ?`, server))[0] as Config;
       
       conn.end();
       return config;
+    }
+    catch (err) { console.error(err); throw err; }
+  }
+
+  public async loadAllConfig(): Promise<Config[]> {    
+    try {
+      const conn = await this.pool.getConnection();
+      const configs = (await conn.query(`SELECT * FROM config`)) as Config[];
+      
+      conn.end();
+      return configs;
     }
     catch (err) { console.error(err); throw err; }
   }
