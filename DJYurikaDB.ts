@@ -33,7 +33,7 @@ export class DJYurikaDB {
   public async loadConfig(server: string): Promise<Config> {
     try {
       const conn = await this.pool.getConnection();
-      const config = (await conn.query(`SELECT volume FROM config WHERE server = ?`, server))[0] as Config;
+      const config = (await conn.query(`SELECT server, name, volume, command_channel as commandChannelID, developer_role as developerRoleID, moderator_role as moderatorRoleID FROM config WHERE server = ?`, server))[0] as Config;
       
       conn.end();
       return config;
@@ -44,7 +44,7 @@ export class DJYurikaDB {
   public async loadAllConfig(): Promise<Config[]> {    
     try {
       const conn = await this.pool.getConnection();
-      const configs = (await conn.query(`SELECT * FROM config`)) as Config[];
+      const configs = (await conn.query(`SELECT server, name, volume, command_channel as commandChannelID, developer_role as developerRoleID, moderator_role as moderatorRoleID FROM config`)) as Config[];
       
       conn.end();
       return configs;
@@ -52,22 +52,28 @@ export class DJYurikaDB {
     catch (err) { console.error(err); throw err; }
   }
 
-  public async saveConfig(config: Config, server: string) {
+  public async saveConfig(config: Config) {
+
     try {
       const conn = await this.pool.getConnection();
-      const exist = (await conn.query(`SELECT COUNT(*) as exist FROM config WHERE server = ?`, server))[0].exist;
+      const exist = (await conn.query(`SELECT COUNT(*) as exist FROM config WHERE server = ?`, config.server))[0].exist;
       if (exist) {
         // update each attribute of DBConfig
-        conn.query('UPDATE config SET volume = ? WHERE server = ?', [config.volume, server])
-          .then(() => conn.end());
+        conn.query('UPDATE config SET name = ?, volume = ?, command_channel = ?, developer_role = ?, moderator_role = ? WHERE server = ?',
+        [config.name, config.volume, config.commandChannelID, config.developerRoleID, config.moderatorRoleID, config.server])
+        .then(() => conn.end());
       }
       else {
         // create
-        conn.query('INSERT INTO config (server, volume) VALUES (?, ?)', [server, config.volume])
-          .then(() => conn.end());
+        conn.query('INSERT INTO config (server, name, volume, command_channel, developer_role, moderator_role) VALUES (?, ?, ?, ?, ?, ?)',
+        [config.server, config.name, config.volume, config.commandChannelID, config.developerRoleID, config.moderatorRoleID])
+        .then(() => conn.end());
       }
     }
-    catch (err) { console.error(err); }
+    catch (err) {
+      console.error(err);
+      throw err;
+    }
   }
 
   public async checkSongRegistered(song: Song, server: string): Promise<boolean> {

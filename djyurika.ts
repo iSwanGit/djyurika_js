@@ -59,6 +59,7 @@ export class DJYurika {
 
   private readonly defaultConfig: Config;
   private readonly serverConfigs: Map<string, Config>;
+  private readonly overrideConfigs: Map<string, Config>;
   private readonly connections: Map<string, BotConnection>;
   private readonly interval: number;
   
@@ -67,6 +68,7 @@ export class DJYurika {
     this.client = new Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION'] });
     this.defaultConfig = environment.defaultConfig as Config;
     this.serverConfigs = new Map<string, Config>();
+    this.overrideConfigs = new Map<string, Config>();
     this.connections = new Map<string, BotConnection>();
     this.interval = environment.refreshInterval;
   }
@@ -94,14 +96,30 @@ export class DJYurika {
     await this.db.waitAndCheckPoolCreated();  // wait until pool is created
 
     const configs = await this.db.loadAllConfig();
-    configs.forEach(config => {
+    for (const config of configs) {
       this.serverConfigs.set(config.server, config);
-    });
+    }
+    this.loadLocalConfig();
+    
     console.log('All configs are loaded');
+  }
+
+  // load config in environments and override
+  private loadLocalConfig() {
+    for (const config of environment.overrideConfigs) {
+      const override = Object.assign(new Config(), this.serverConfigs.get(config.serverID));  // deep copy
+      override.volume = config.volume ||  this.defaultConfig.volume;
+      override.commandChannelID = config.commandChannelID || override.commandChannelID || null;
+      override.developerRoleID = config.developerRoleID || override.developerRoleID || null;
+      override.moderatorRoleID = config.moderatorRoleID || override.moderatorRoleID || null;
+      this.overrideConfigs.set(config.serverID, override);
+    }
+    console.log(`${environment.overrideConfigs.length} configs overrided`);
   }
 
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
+      this.refreshServerName();
       await this.client.user.setActivity('Help: ~h', { type: 'PLAYING' });
       console.log('Ready!');
     });
@@ -115,10 +133,21 @@ export class DJYurika {
 
   private registerMessageHandler() {
     this.client.on('message', async message => {
-      const cfg = this.serverConfigs.get(message.guild.id);
+      
+      // load config
+      let cfg: Config;
+      if (this.overrideConfigs.has(message.guild.id)) {
+        cfg = this.overrideConfigs.get(message.guild.id);
+      }
+      else {
+        cfg = this.serverConfigs.get(message.guild.id);
+      }
+
+      // load bot connection
       let conn = this.connections.get(message.guild.id);
       if (!conn) {
         conn = new BotConnection();
+        conn.config = cfg;
         this.connections.set(message.guild.id, conn);
       }
     
@@ -530,6 +559,20 @@ export class DJYurika {
   }
 
   // -------- function definition -------
+
+  private async refreshServerName() {
+    for (const cfg of this.serverConfigs.values()) {
+      const currentName = this.client.guilds.cache.get(cfg.server).name;
+      if (cfg.name !== currentName) {
+        cfg.name = currentName;
+        this.db.saveConfig(cfg)
+        .then(() => {
+          console.log(`Server config of '${cfg.name}' is updated`);
+        })
+        .catch();
+      }
+    }
+  }
 
   private sendHelp(message: Message) {
     const opt = this.serverConfigs.get(message.guild.id);
@@ -998,7 +1041,7 @@ export class DJYurika {
       }
       else {
         conn.config = this.defaultConfig;
-        this.db.saveConfig(this.defaultConfig, message.guild.id);
+        this.db.saveConfig(this.defaultConfig);
         console.info(`Load and save default config of ${message.guild.name}`);
       }
       if (message && conn.joinedVoiceConnection) {
@@ -1018,7 +1061,7 @@ export class DJYurika {
   
   private async saveConfig(message: Message, conn: BotConnection) {
     try {
-      this.db.saveConfig(conn.config, message.guild.id);
+      this.db.saveConfig(conn.config);
       console.info(`Save config of ${message.guild.name} successfully`);
       if (message) {
         message.channel.send(`✅ \`Config save success\``);
@@ -2099,3 +2142,5 @@ export class DJYurika {
   
 
 }
+
+export default DJYurika;
