@@ -576,17 +576,15 @@ export class DJYurika {
 
   private sendHelp(message: Message) {
     const opt = this.serverConfigs.get(message.guild.id);
-    let cmdName: string, cmdValue: string;
+    const cmdName = '명령어';
+    let cmdValue: string;
     if (checkDeveloperRole(message.member, opt)) {
-      cmdName = '명령어 (Developer)';
       cmdValue = this.helpCmdDev;
     }
     else if (checkModeratorRole(message.member, opt)) {
-      cmdName = '명령어 (Moderator)';
       cmdValue = this.helpCmdMod;
     }
     else {
-      cmdName = '명령어';
       cmdValue = this.helpCmd;
     }
   
@@ -1468,7 +1466,7 @@ export class DJYurika {
       songInfo.title,
       songInfo.permalink_url,
       songInfo.user.username,
-      songInfo.artwork_url,
+      songInfo.artwork_url || songInfo.user.avatar_url,
       Math.round(songInfo.full_duration / 1000),
       user.id,
       SongSource.SOUNDCLOUD,
