@@ -904,18 +904,12 @@ export class DJYurika {
     );  
   
     let msg = await message.channel.send(embedMessage);
-    try {
-      if (msg.deleted) throw Error();
-      else msg.react(this.acceptEmoji);
-      if (msg.deleted) throw Error();
-      else msg.react(this.denyEmoji);
-    }
-    catch (err) {
-      // const error = err as DiscordAPIError;
-      // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-      console.error('Reaction Error: Stop request message deleted already');
-    }
-    
+    msg.react(this.acceptEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
+    msg.react(this.denyEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });    
   
     const req = new LeaveRequest();
     req.message = msg;
@@ -973,17 +967,13 @@ export class DJYurika {
     );  
   
     let msg = await message.channel.send(embedMessage);
-    try {
-      if (msg.deleted) throw Error();
-      else msg.react(this.acceptEmoji);
-      if (msg.deleted) throw Error();
-      else msg.react(this.denyEmoji);
-    }
-    catch (err) {
-      // const error = err as DiscordAPIError;
-      // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-      console.error('Reaction Error: Move request message deleted already');
-    }
+    
+    msg.react(this.acceptEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
+    msg.react(this.denyEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
   
     const req = new MoveRequest();
     req.message = msg;
@@ -1402,20 +1392,15 @@ export class DJYurika {
   
     conn.searchResultMsgs.set(msg.id, searchResult);
   
-    try {
-      for (let index = 0; index < fields.length; index++) {
-        if (msg.deleted) throw Error();
-        else msg.react(this.selectionEmojis[index]);
-      }
-      if (msg.deleted) throw Error();
-      else msg.react(this.cancelEmoji);
+    for (let index = 0; index < fields.length; index++) {
+      msg.react(this.selectionEmojis[index]).catch((err) => {
+        console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+      });
     }
-    catch (err) {
-      // const error = err as DiscordAPIError;
-      // console.error(`[Error ${error.code}] (HTTP ${error.httpStatus}) ${error.name}: ${error.message}`);
-      console.error('Reaction Error: Search message deleted already');
-    }  
-  
+    msg.react(this.cancelEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
+
   }
   
   private async getYoutubePlaylistInfo(url: string) {
@@ -1668,8 +1653,12 @@ export class DJYurika {
     confirmList.provider = SongSource.SOUNDCLOUD;
     conn.addPlaylistConfirmList.set(msg.id, confirmList);
   
-    msg.react(this.acceptEmoji);
-    msg.react(this.cancelEmoji);
+    msg.react(this.acceptEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
+    msg.react(this.cancelEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });
   }
   
   private async parseYoutubePlaylist(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {
@@ -1726,8 +1715,12 @@ export class DJYurika {
     confirmList.provider = SongSource.YOUTUBE;
     conn.addPlaylistConfirmList.set(msg.id, confirmList);
   
-    msg.react(this.acceptEmoji);
-    msg.react(this.cancelEmoji);
+    msg.react(this.acceptEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });;
+    msg.react(this.cancelEmoji).catch((err) => {
+      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+    });;
   }
   
   private async playYoutubeRequestList(conn: BotConnection, message: Message, user: User, playlist: ytpl.Result, msgId: string) {
