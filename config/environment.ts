@@ -1,3 +1,5 @@
+import { Config } from '../types';
+
 export const environment = {
   prefix: '~',
   defaultConfig: {
@@ -11,19 +13,6 @@ export const environment = {
 
   // for debug
   overrideConfigs: [
-    {
-      serverID: '759404553451601920', // mmk
-      volume: 40,
-      developerRoleID: '760741584492298251',
-      moderatorRoleID: '760806219509137418',
-      commandChannelID: '762474528840351774',  // bot-command
-    },
-    {
-      serverID: '706826945010204743', // mikuwallets
-      volume: 35,
-      developerRoleID: '757615133412425850',  // admin
-      moderatorRoleID: null,
-      commandChannelID: '822370707942014976', // talk
-    },
-  ],
+    
+  ] as Config[],
 }

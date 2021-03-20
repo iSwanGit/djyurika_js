@@ -107,12 +107,12 @@ export class DJYurika {
   // load config in environments and override
   private loadLocalConfig() {
     for (const config of environment.overrideConfigs) {
-      const override = Object.assign(new Config(), this.serverConfigs.get(config.serverID));  // deep copy
+      const override = Object.assign(new Config(), this.serverConfigs.get(config.server));  // deep copy
       override.volume = config.volume ||  this.defaultConfig.volume;
       override.commandChannelID = config.commandChannelID || override.commandChannelID || null;
       override.developerRoleID = config.developerRoleID || override.developerRoleID || null;
       override.moderatorRoleID = config.moderatorRoleID || override.moderatorRoleID || null;
-      this.overrideConfigs.set(config.serverID, override);
+      this.overrideConfigs.set(config.server, override);
     }
     console.log(`${environment.overrideConfigs.length} configs overrided`);
   }
