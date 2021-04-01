@@ -1156,6 +1156,7 @@ export class DJYurika {
       switch (url.host) {
         case 'www.youtube.com':
         case 'youtube.com':
+        case 'm.youtube.com':
         case 'www.youtu.be':
         case 'youtu.be':
           return SongSource.YOUTUBE;
@@ -1163,6 +1164,7 @@ export class DJYurika {
         case 'soundcloud.app.goo.gl':
         case 'soundcloud.com':
         case 'www.soundcloud.com':
+        case 'm.soundcloud.com':
           return SongSource.SOUNDCLOUD;
     
         default:
