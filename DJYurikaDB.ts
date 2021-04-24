@@ -1,6 +1,6 @@
 import { createPool, Pool } from 'mariadb';
 import { keys } from './config';
-import { Config, Song } from './types';
+import { Config, DBSong, Song } from './types';
 import { getRandomInt } from './util';
 
 export class DJYurikaDB {
@@ -96,7 +96,7 @@ export class DJYurikaDB {
   public async addSong(song: Song, server: string) {
     try {
       const conn = await this.pool.getConnection();
-      conn.query('INSERT INTO playlist (id, title, createdat, source, guild) VALUES (?, ?, (SELECT NOW()), ?, ?)', [song.id, song.title, song.source, server])
+      conn.query('INSERT INTO playlist (id, title, createdat, source, url, guild) VALUES (?, ?, (SELECT NOW()), ?, ?, ?)', [song.id, song.title, song.source, song.url, server])
         .then(async () => await this.increasePickCount(song, server))
         .catch(err => console.error(err))
         .finally(() => conn.end());
@@ -107,14 +107,14 @@ export class DJYurikaDB {
   public async getRandomSongID(server: string): Promise<Song> {
     try {
       const conn = await this.pool.getConnection();
-      let idRows: any = (await conn.query('SELECT id, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
+      let idRows: any = (await conn.query('SELECT id, url, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
       idRows = idRows.sort(() => 0.5 - Math.random());  // shuffle one more
       const res = idRows[getRandomInt(0, idRows.length)] as Song;
-      const song = new Song(res.id, null, null, null, null, null, null, res.source);
+      const song = new Song(res.id, null, res.url, null, null, null, null, res.source);
       conn.end();
       return song;
     }
-    catch (err) { console.error(err); }    
+    catch (err) { console.error(err); }
   }
 
   public async increasePlayCount(song: Song, server: string) {
@@ -143,15 +143,19 @@ export class DJYurikaDB {
     try {
       const conn = await this.pool.getConnection();
 
-      const dbTitle: string = (await conn.query('SELECT title FROM playlist WHERE id = ? AND source = ?', [song.id, song.source]))[0].title;
+      const entity: DBSong = (await conn.query('SELECT title, url FROM playlist WHERE id = ? AND source = ?', [song.id, song.source]))[0];
+      const dbTitle: string = entity.title;
+      const dbPermalink: string = entity.url;
+
       if (!dbTitle.length || dbTitle !== song.title) {
-        conn.query('UPDATE playlist SET title = ? WHERE id = ? AND source = ?', [song.title, song.id, song.source])
-          .then(() => conn.end());
+        conn.query('UPDATE playlist SET title = ? WHERE id = ? AND source = ?', [song.title, song.id, song.source]);
         console.info('Update song title to DB column');
       }
-      else {
-        conn.end();
+      if (!dbPermalink || dbPermalink !== song.url) {
+        conn.query('UPDATE playlist SET url = ? WHERE id = ? AND source = ?', [song.url, song.id, song.source]);
+        console.info('Update permalink to DB column');
       }
+      conn.end();
     }
     catch (err) { console.error(err); }
   }

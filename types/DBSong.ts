@@ -6,4 +6,5 @@ export class DBSong {
   pickCount: number;
   createdAt?: Date;
   lastPlayedAt?: Date;
+  url?: string;
 }
