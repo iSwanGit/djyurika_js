@@ -732,10 +732,10 @@ export class DJYurika {
   
     switch (song.source) {
       case SongSource.YOUTUBE:
-        embedMessage.setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png');
+        embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
         break;
       case SongSource.SOUNDCLOUD:
-        embedMessage.setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png');
+        embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
         break;
     }
     
@@ -1592,10 +1592,10 @@ export class DJYurika {
   
       switch (song.source) {
         case SongSource.YOUTUBE:
-          embedMessage.setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png');
+          embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
           break;
         case SongSource.SOUNDCLOUD:
-          embedMessage.setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png');
+          embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
           break;
       }
     
@@ -1631,7 +1631,7 @@ export class DJYurika {
   
     const embedMessage = new MessageEmbed()
     .setAuthor('사운드클라우드 플레이리스트 감지됨', playlist.user.avatar_url, playlist.permalink_url)
-    .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
+    .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
     .setColor('#FF5500')
     .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
     .setDescription(`Requested by <@${message.member.id}>`)
@@ -1693,7 +1693,7 @@ export class DJYurika {
   
     const embedMessage = new MessageEmbed()
     .setAuthor('유튜브 플레이리스트 감지됨', playlist.author?.bestAvatar.url, playlist.url)
-    .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
+    .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
     .setColor('#FFC0CB')
     .setThumbnail(playlist.bestThumbnail.url)
     .setDescription(`Requested by <@${message.member.id}>`)
@@ -1784,7 +1784,7 @@ export class DJYurika {
         // notice multiple song add
         const embedMessage = new MessageEmbed()
         .setAuthor('재생목록 추가', user.avatarURL(), playlist.url)
-        .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
+        .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
         .setColor('#0000ff')
         .setThumbnail(playlist.bestThumbnail.url)
         .addFields(
@@ -1844,7 +1844,7 @@ export class DJYurika {
   
       const embedMessage = new MessageEmbed()
       .setAuthor('재생목록 추가', user.avatarURL(), playlist.url)
-      .setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png')
+      .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
       .setColor('#0000ff')
       .setThumbnail(playlist.bestThumbnail.url)
       .addFields(
@@ -1937,7 +1937,7 @@ export class DJYurika {
         // notice multiple song add
         const embedMessage = new MessageEmbed()
         .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
-        .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
+        .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
         .setColor('#0000ff')
         .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
         .addFields(
@@ -1997,7 +1997,7 @@ export class DJYurika {
   
       const embedMessage = new MessageEmbed()
       .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
-      .setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png')
+      .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
       .setColor('#0000ff')
       .setThumbnail(playlist.artwork_url)
       .addFields(
@@ -2120,10 +2120,10 @@ export class DJYurika {
   
           switch (song.source) {
             case SongSource.YOUTUBE:
-              embedMessage.setFooter('Youtube', 'https://disk.tmi.tips/web_images/youtube_social_circle_red.png');
+              embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
               break;
             case SongSource.SOUNDCLOUD:
-              embedMessage.setFooter('SoundCloud', 'https://disk.tmi.tips/web_images/soundcloud.png');
+              embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
               break;
           }
   
