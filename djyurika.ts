@@ -174,22 +174,27 @@ export class DJYurika {
     
       switch (cmd.toLowerCase()) {
         case 'p':
+        case 'ㅔ':
           this.execute(message, conn);
           break;
     
         case 'np':
+        case 'ㅞ':
           this.nowPlaying(message, conn);
           break;
     
         case 'q':
+        case 'ㅂ':
           this.getQueue(message, conn);
           break;
     
         case 's':
+        case 'ㄴ':
           this.skip(message, conn);
           break;
     
         case 'l':
+        case 'ㅣ':
           this.requestStop(message, conn, cfg);
           break;
     
