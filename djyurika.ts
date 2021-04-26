@@ -1185,7 +1185,7 @@ export class DJYurika {
     const exist = await this.db.checkSongRegistered(song, guild.id);
     if (!exist) {
       await this.db.addSong(song, guild.id); // include incresing pick count
-      console.info(`[${guild.name}] Add song to DB: ${song.id}`);  
+      console.log(`[${guild.name}] Add song to DB: ${song.id}`);  
     }
     else {
       this.db.increasePickCount(song, guild.id);
@@ -2133,7 +2133,7 @@ export class DJYurika {
       }
       catch (err) {
         // cannot catch DiscordAPIError (api issue)
-        console.error(`[${conn.joinedVoiceConnection.channel.guild.name}] ${err.message}`);
+        console.info(`[${conn.joinedVoiceConnection.channel.guild.name}] ${err.message}`);
         clearInterval(conn.intervalHandler);
         delete conn.intervalHandler;
       }

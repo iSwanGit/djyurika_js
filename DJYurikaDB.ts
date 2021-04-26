@@ -149,11 +149,11 @@ export class DJYurikaDB {
 
       if (!dbTitle.length || dbTitle !== song.title) {
         conn.query('UPDATE playlist SET title = ? WHERE id = ? AND source = ?', [song.title, song.id, song.source]);
-        console.info('Update song title to DB column');
+        console.log('Update song title to DB column');
       }
       if (!dbPermalink || dbPermalink !== song.url) {
         conn.query('UPDATE playlist SET url = ? WHERE id = ? AND source = ?', [song.url, song.id, song.source]);
-        console.info('Update permalink to DB column');
+        console.log('Update permalink to DB column');
       }
       conn.end();
     }

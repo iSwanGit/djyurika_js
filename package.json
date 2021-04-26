@@ -1,6 +1,6 @@
 {
   "name": "djyurika-js",
-  "version": "2.2.0",
+  "version": "2.2.2",
   "description": "DJ Yurika JavaScript ver.",
   "main": "index.ts",
   "scripts": {
