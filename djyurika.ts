@@ -1082,15 +1082,20 @@ export class DJYurika {
   }
   
   private calculatePing(message: Message) {
-    const receiveLatency = Date.now() - message.createdTimestamp;
-    
+    const stamp1 = Date.now();
     message.channel.send('🏓 `Calculating...`').then(msg => {
-      const totalLatency = msg.createdTimestamp - message.createdTimestamp;
-      const apiLatency = Math.round(this.client.ws.ping);
+      const stamp2 = Date.now();
+
+      const receive = stamp1 - message.createdTimestamp;
+      const response = msg.createdTimestamp - stamp1;
+      const trip = stamp2 - stamp1;
+      const total = msg.createdTimestamp - message.createdTimestamp;
+
       msg.delete();
-      const pingMessage = `⌛ response: \`${totalLatency}ms\` \n`
-        + `⏱ receive: \`${receiveLatency}ms\` \n`
-        + `💓 API heartbeat: \`${apiLatency}ms\` \n`;
+      const pingMessage = `⏳ receive: \`${receive}ms\` \n`
+      + `⌛ response: \`${response}ms\` \n`
+      + `⏱ bot message trip: \`${trip}ms\` \n`
+      + `💓 ws ping: \`${this.client.ws.ping}ms\` \n`;
       const embedMessage = new MessageEmbed()
         .setTitle('🏓 Ping via message')
         .setDescription(pingMessage)
