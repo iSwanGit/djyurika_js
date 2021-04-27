@@ -1236,93 +1236,100 @@ export class DJYurika {
   
     const dispatcher = conn.joinedVoiceConnection;
   
-    switch (song.source) {
-      case SongSource.YOUTUBE:
-        dispatcher.play(await ytdl(song.url), { type: 'opus' })
-        .on("finish", () => {
-          console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-          const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-          if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-            console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-            (guild.channels.cache.get(this.serverConfigs.get(guild.id).commandChannelID) as TextChannel).send(
-              `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-            );
-          }
-          conn.skipFlag = false;  // reset flag
-          conn.recentNowPlayingMessage = null;
-          switch (conn.loopFlag) {
-            case LoopType.LIST:
-              conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-            case LoopType.NONE:
-              conn.queue.songs.shift();
-              break;
+    try {
+      switch (song.source) {
+        case SongSource.YOUTUBE:
+          dispatcher.play(await ytdl(song.url), { type: 'opus' })
+          .on("finish", () => {
+            console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+            const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+            if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+              console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+              (guild.channels.cache.get(this.serverConfigs.get(guild.id).commandChannelID) as TextChannel).send(
+                `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+              );
+            }
+            conn.skipFlag = false;  // reset flag
+            conn.recentNowPlayingMessage = null;
+            switch (conn.loopFlag) {
+              case LoopType.LIST:
+                conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+                console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+              case LoopType.NONE:
+                conn.queue.songs.shift();
+                break;
+              
+              case LoopType.SINGLE:
+                console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+                break;
+            }
+            this.play(guild, conn.queue.songs[0], conn);
+          })
+          .on("error", error => {
+            conn.queue.textChannel.send('```cs\n'+
+            '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+            `Error: ${error.message}`+
+            '```');
+            console.error(error);
+          })
+          .setVolumeLogarithmic(conn.config.volume / 100);
+          break;
+        case SongSource.SOUNDCLOUD:
+          dispatcher.play(await scdl.download(song.url))
+          .on("finish", () => {
+            console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+            const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+            if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+              console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+              conn.queue.textChannel.send(
+                `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+              );
+            }
+            conn.skipFlag = false;  // reset flag
             
-            case LoopType.SINGLE:
-              console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-              break;
-          }
-          this.play(guild, conn.queue.songs[0], conn);
-        })
-        .on("error", error => {
-          conn.queue.textChannel.send('```cs\n'+
-          '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-          `Error: ${error.message}`+
-          '```');
-          console.error(error);
-        })
-        .setVolumeLogarithmic(conn.config.volume / 100);
-        break;
-      case SongSource.SOUNDCLOUD:
-        dispatcher.play(await scdl.download(song.url))
-        .on("finish", () => {
-          console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-          const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-          if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-            console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-            (guild.channels.cache.get(this.serverConfigs.get(guild.id).commandChannelID) as TextChannel).send(
-              `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-            );
-          }
-          conn.skipFlag = false;  // reset flag
-          
-          conn.recentNowPlayingMessage = null;
-          clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
-          delete conn.intervalHandler;
-          
-          switch (conn.loopFlag) {
-            case LoopType.LIST:
-              conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-            case LoopType.NONE:
-              conn.queue.songs.shift();
-              break;
+            conn.recentNowPlayingMessage = null;
+            clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
+            delete conn.intervalHandler;
             
-            case LoopType.SINGLE:
-              console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-              break;
-          }
-          this.play(guild, conn.queue.songs[0], conn);
-        })
-        .on("error", error => {
-          conn.queue.textChannel.send('```cs\n'+
-          '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-          `Error: ${error.message}`+
-          '```');
-          console.error(error);
-        })
-        .setVolumeLogarithmic(conn.config.volume / 100);
-        break;
+            switch (conn.loopFlag) {
+              case LoopType.LIST:
+                conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+                console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+              case LoopType.NONE:
+                conn.queue.songs.shift();
+                break;
+              
+              case LoopType.SINGLE:
+                console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+                break;
+            }
+            this.play(guild, conn.queue.songs[0], conn);
+          })
+          .on("error", error => {
+            conn.queue.textChannel.send('```cs\n'+
+            '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+            `Error: ${error.message}`+
+            '```');
+            console.error(error);
+          })
+          .setVolumeLogarithmic(conn.config.volume / 100);
+          break;
+      }
+      this.db.increasePlayCount(song, guild.id);
+      this.db.fillEmptySongInfo(song);
+  
+      conn.songStartTimestamp = Date.now();
+      console.log(`[${guild.name}] ` + `재생: ${song.title}`);
+      // client.user.setActivity(song.title, { type: 'LISTENING' });
+      conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
     }
-  
-  
-    this.db.increasePlayCount(song, guild.id);
-    this.db.fillEmptySongInfo(song);
-  
-    conn.songStartTimestamp = Date.now();
-    console.log(`[${guild.name}] ` + `재생: ${song.title}`);
-    // client.user.setActivity(song.title, { type: 'LISTENING' });
-    conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+    catch (err: any) {
+      console.error(err.message + ` (${song.url})`);
+      conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
+
+      conn.queue.songs.shift();
+      this.play(guild, conn.queue.songs[0], conn);
+    }
   }
   
   private async selectRandomSong(guild: Guild): Promise<Song> {
