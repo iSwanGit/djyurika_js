@@ -272,6 +272,9 @@ export class DJYurika {
       const reactedUser = reaction.message.guild.members.cache.get(user.id);
       var selectedMsg: SearchResult | MoveRequest | LeaveRequest | AddPlaylistConfirmList;
     
+      if (!conn) return;  // ignore message which is created before bot is initialized
+      // 아무 명령도 받지 않은 초기 상태 && 기존에 쌓인 메시지 인 경우 무시
+
       if (user.id === this.client.user.id) return; // ignore self reaction
       if (!conn.searchResultMsgs.has(reaction.message.id) && !conn.moveRequestList.has(reaction.message.id) && !conn.leaveRequestList.has(reaction.message.id) && !conn.addPlaylistConfirmList.has(reaction.message.id)) return; // ignore reactions from other messages
     
@@ -441,6 +444,9 @@ export class DJYurika {
     
       var selectedMsg: SearchResult | MoveRequest | LeaveRequest;
     
+      if (!conn) return;  // ignore message which is created before bot is initialized
+      // 아무 명령도 받지 않은 초기 상태 && 기존에 쌓인 메시지 인 경우 무시
+
       if (user.id === this.client.user.id) return; // ignore self reaction
       if (!conn.searchResultMsgs.has(reaction.message.id) && !conn.moveRequestList.has(reaction.message.id) && !conn.leaveRequestList.has(reaction.message.id)) return; // ignore reactions from other messages
     
