@@ -622,7 +622,7 @@ export class DJYurika {
   private async execute(message: Message, conn: BotConnection) {
     const args = message.content.split(' ');
   
-    if (args.length < 2) {
+    if (args.length < 2 && conn.joinedVoiceConnection) {
       return message.channel.send('`~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
     }
   
@@ -640,6 +640,22 @@ export class DJYurika {
         return message.channel.send('```cs\n'+
         '# Error: 요청 음성채널 권한 없음\n'+
         '```');
+      }
+    }
+
+    // first ~p, then random pick
+    if (!conn.joinedVoiceConnection) {
+      try {
+        const randSong = await this.selectRandomSong(message.guild);
+        console.log('Play request with no args, pick random one');
+        this.playProcess(conn, message, message.author, randSong, null);
+      }
+      catch (err) {
+        console.error(err);
+        message.channel.send('History is empty, `~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
+      }
+      finally {
+        return;
       }
     }
   
@@ -1338,46 +1354,51 @@ export class DJYurika {
   }
   
   private async selectRandomSong(guild: Guild): Promise<Song> {
-    const randRes = await this.db.getRandomSongID(guild.id);
     try {
-      let randSong: videoInfo | TrackInfo;
-      let song: Song;
-      switch (randRes.source) {
-        case SongSource.YOUTUBE:
-          randSong = await this.getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randRes.id);
-          song = new Song(
-            randSong.videoDetails.videoId,
-            randSong.videoDetails.title,
-            randSong.videoDetails.video_url,
-            randSong.videoDetails.ownerChannelName,
-            randSong.videoDetails.thumbnails.slice(-1)[0].url,
-            parseInt(randSong.videoDetails.lengthSeconds),
-            this.client.user.id,
-            SongSource.YOUTUBE,
-          );
-          break;
-        case SongSource.SOUNDCLOUD:
-          randSong = await this.getSoundcloudSongInfoByID(parseInt(randRes.id));
-          song = new Song(
-            randSong.id.toString(),
-            randSong.title,
-            randSong.permalink_url,
-            randSong.user.username,
-            randSong.artwork_url,
-            Math.round(randSong.full_duration / 1000),
-            this.client.user.id,
-            SongSource.SOUNDCLOUD,
-          );
-          break;
+      const randRes = await this.db.getRandomSongID(guild.id);
+      try {
+        let randSong: videoInfo | TrackInfo;
+        let song: Song;
+        switch (randRes.source) {
+          case SongSource.YOUTUBE:
+            randSong = await this.getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randRes.id);
+            song = new Song(
+              randSong.videoDetails.videoId,
+              randSong.videoDetails.title,
+              randSong.videoDetails.video_url,
+              randSong.videoDetails.ownerChannelName,
+              randSong.videoDetails.thumbnails.slice(-1)[0].url,
+              parseInt(randSong.videoDetails.lengthSeconds),
+              this.client.user.id,
+              SongSource.YOUTUBE,
+            );
+            break;
+          case SongSource.SOUNDCLOUD:
+            randSong = await this.getSoundcloudSongInfoByID(parseInt(randRes.id));
+            song = new Song(
+              randSong.id.toString(),
+              randSong.title,
+              randSong.permalink_url,
+              randSong.user.username,
+              randSong.artwork_url,
+              Math.round(randSong.full_duration / 1000),
+              this.client.user.id,
+              SongSource.SOUNDCLOUD,
+            );
+            break;
+        }
+        return song;
       }
-      return song;
+      catch (err) {
+        const errMsg = err.toString().split('\n')[0];
+        console.error(errMsg);
+        console.error('Song id is: ' + randRes);
+        console.log('Get another random pick');
+        return this.selectRandomSong(guild);
+      }
     }
     catch (err) {
-      const errMsg = err.toString().split('\n')[0];
-      console.error(errMsg);
-      console.error('Song id is: ' + randRes);
-      console.log('Get another random pick');
-      return this.selectRandomSong(guild);
+      throw err;
     }
   }
   
@@ -1565,7 +1586,9 @@ export class DJYurika {
         '```');
       }
       finally {
-        message.channel.messages.fetch(msgId).then(msg => msg.delete());
+        if (msgId) {
+          message.channel.messages.fetch(msgId).then(msg => msg.delete());
+        }
       }
     } else {
       this.addToPlaylist(song, conn);
