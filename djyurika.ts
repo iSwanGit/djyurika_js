@@ -653,7 +653,7 @@ export class DJYurika {
     }
 
     // first ~p, then random pick
-    if (!conn.joinedVoiceConnection) {
+    if (args.length === 1 && !conn.joinedVoiceConnection) {
       try {
         const randSong = await this.selectRandomSong(message.guild);
         console.log('Play request with no args, pick random one');
