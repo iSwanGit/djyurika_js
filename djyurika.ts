@@ -9,6 +9,7 @@ import { environment, keys } from './config';
 import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, SearchError, SearchResult, ServerOption, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
+import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
 export class DJYurika {
   private readonly client: Client;
@@ -303,12 +304,20 @@ export class DJYurika {
         }
       
         const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
-        if (selected > environment.maxSearchResults) return;  // ignore other reaction
-        const songid = selectedMsg.songIds[selected];
-        
-        const url = environment.youtubeUrlPrefix + songid;
-        this.playYoutubeRequest(conn, reaction.message, user, url, reaction.message.id);
-      
+        if (selected >= environment.maxSearchResults * 2) return;  // ignore other reaction
+        const [type, url] = selectedMsg.songUrls[selected];
+
+        switch (type) {
+          case SongSource.YOUTUBE:
+            this.playYoutubeRequest(conn, reaction.message, user, url, reaction.message.id);
+            break;
+          case SongSource.SOUNDCLOUD:
+            this.playSoundcloudRequest(conn, reaction.message, user, url, reaction.message.id);
+            break;
+          default:
+            break;
+        }
+
         conn.searchResultMsgs.delete(reaction.message.id);
         return;
       }
@@ -1404,10 +1413,14 @@ export class DJYurika {
   
   private async keywordSearch(message: Message, msgId: string, conn: BotConnection) {
     const keyword = message.content.split(' ').slice(1).join(' ');
-    // console.log(encodeURIComponent(keyword));
-    let res: YoutubeSearch;
+    
+    let ytRes: YoutubeSearch;
+    let scRes: SearchResponseAll;
     try {
-      res = await getYoutubeSearchList(encodeURIComponent(keyword));
+      [ytRes, scRes] = await Promise.all([
+        getYoutubeSearchList(encodeURIComponent(keyword)),
+        this.getSoundcloudSearchList(keyword)
+      ]);
     }
     catch (err) {
       const error = JSON.parse(err).error as SearchError;
@@ -1420,21 +1433,27 @@ export class DJYurika {
     }
   
     const searchResult = new SearchResult();
-    searchResult.songIds = [];
+    searchResult.songUrls = [];
     searchResult.reqUser = message.author;
   
     let fields = [];
     // let description = '';
   
-    res.items.map((item, index) => {
+    let indexOffset = 0;
+    ytRes.items.map((item, index) => {
       // description += `**${index+1}. [${item.snippet.title}](https://www.youtube.com/watch?v=${item.id.videoId})** (${item.snippet.channelTitle})\n\n`;
-      fields.push({ name: `${index+1}. ${item.snippet.title}`, value: `${item.snippet.channelTitle} ([see video](https://www.youtube.com/watch?v=${item.id.videoId}))` });
-      searchResult.songIds.push(item.id.videoId);
+      fields.push({ name: `[YT] ${index+1}. ${item.snippet.title}`, value: `${item.snippet.channelTitle} ([see video](https://www.youtube.com/watch?v=${item.id.videoId}))` });
+      searchResult.songUrls.push([SongSource.YOUTUBE, `https://www.youtube.com/watch?v=${item.id.videoId}`]);
+      indexOffset++;
+    });
+    scRes.collection.map((item: TrackInfo, index) => {
+      fields.push({ name: `[SC] ${indexOffset+index+1}. ${item.title}`, value: `${item.user.username} ([see track](${item.permalink_url}))` });
+      searchResult.songUrls.push([SongSource.SOUNDCLOUD, item.permalink_url]);
     });
     
     const embedMessage = new MessageEmbed()
       .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
-      .setTitle('Search result')
+      .setTitle('Search result [YT: YouTube, SC: SoundCloud]')
       .setDescription(`Requested by <@${message.member.id}>`)
       .setColor('#FFC0CB')
       .addFields(fields);
@@ -1474,6 +1493,14 @@ export class DJYurika {
   
   private async getSoundcloudPlaylistInfo(url: string) {
     return await scdl.getSetInfo(url);
+  }
+
+  private async getSoundcloudSearchList(query: string) {
+    return await scdl.search({
+      limit: environment.maxSearchResults,
+      resourceType: 'tracks',
+      query: query,
+    });
   }
   
   private async playSoundcloudRequest(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {

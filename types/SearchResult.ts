@@ -1,7 +1,8 @@
 import { Message, User } from 'discord.js';
+import { SongSource } from './SongSource';
 
 export class SearchResult {
   message: Message;
-  songIds: Array<string>;
+  songUrls: Array<[SongSource, string]>;
   reqUser: User;
 }

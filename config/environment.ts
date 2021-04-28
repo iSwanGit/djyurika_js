@@ -8,7 +8,7 @@ export const environment = {
   githubRepoUrl: 'https://github.com/MikuWallets/djyurika_js',
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
   youtubeUrlPrefix: 'https://www.youtube.com/watch?v=',
-  maxSearchResults: 5,
+  maxSearchResults: 3,
   refreshInterval: 13000,
 
   // for debug
