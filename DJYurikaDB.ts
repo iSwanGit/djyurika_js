@@ -108,8 +108,9 @@ export class DJYurikaDB {
     try {
       const conn = await this.pool.getConnection();
       let idRows: any = (await conn.query('SELECT id, url, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
-      idRows = idRows.sort(() => 0.5 - Math.random());  // shuffle one more
-      const res = idRows[getRandomInt(0, idRows.length)] as Song;
+      idRows = idRows.sort(() => Math.random() - 0.5);  // shuffle one more
+      const res = idRows[0] as Song;  // reduce shuffle batch
+      // const res = idRows[getRandomInt(0, idRows.length)] as Song; 
       const song = new Song(res.id, null, res.url, null, null, null, null, res.source);
       conn.end();
       return song;

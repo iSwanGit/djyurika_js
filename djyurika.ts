@@ -1370,7 +1370,12 @@ export class DJYurika {
         let song: Song;
         switch (randRes.source) {
           case SongSource.YOUTUBE:
-            randSong = await this.getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randRes.id);
+            if (randRes.url) {
+              randSong = await this.getYoutubeVideoInfo(randRes.url);
+            }
+            else {
+              randSong = await this.getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randRes.id);
+            }
             song = new Song(
               randSong.videoDetails.videoId,
               randSong.videoDetails.title,
@@ -1383,7 +1388,12 @@ export class DJYurika {
             );
             break;
           case SongSource.SOUNDCLOUD:
-            randSong = await this.getSoundcloudSongInfoByID(parseInt(randRes.id));
+            if (randRes.url) {
+              randSong = await this.getSoundcloudSongInfo(randRes.url);
+            }
+            else {
+              randSong = await this.getSoundcloudSongInfoByID(parseInt(randRes.id));
+            }
             song = new Song(
               randSong.id.toString(),
               randSong.title,
@@ -1399,9 +1409,10 @@ export class DJYurika {
         return song;
       }
       catch (err) {
-        const errMsg = err.toString().split('\n')[0];
-        console.error(errMsg);
-        console.error('Song id is: ' + randRes);
+        // const errMsg = err.toString().split('\n')[0];
+        // console.error(errMsg);
+        console.error(err);
+        console.error('Song id is: ' + randRes.id);
         console.log('Get another random pick');
         return this.selectRandomSong(guild);
       }
