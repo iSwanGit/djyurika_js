@@ -1484,15 +1484,10 @@ export class DJYurika {
   
     conn.searchResultMsgs.set(msg.id, searchResult);
   
-    try {
-      for (let index = 0; index < fields.length; index++) {
-        msg.react(this.selectionEmojis[index]).catch((err) => { throw Error(err) });
-      }
-      msg.react(this.cancelEmoji).catch((err) => { throw Error(err) });
+    for (let index = 0; index < fields.length; index++) {
+      msg.react(this.selectionEmojis[index]).catch(err => null);
     }
-    catch (err) {
-      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
-    }
+    msg.react(this.cancelEmoji).catch(err => console.error(`(${err.name}: ${err.message}) - Search message deleted already`));
   }
   
   private async getYoutubePlaylistInfo(url: string) {
@@ -1819,10 +1814,10 @@ export class DJYurika {
   
     msg.react(this.acceptEmoji).catch((err) => {
       console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
-    });;
+    });
     msg.react(this.cancelEmoji).catch((err) => {
       console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
-    });;
+    });
   }
   
   private async playYoutubeRequestList(conn: BotConnection, message: Message, user: User, playlist: ytpl.Result, msgId: string) {
