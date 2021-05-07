@@ -63,6 +63,7 @@ export class DJYurika {
   private readonly overrideConfigs: Map<string, Config>;
   private readonly connections: Map<string, BotConnection>;
   private readonly interval: number;
+  private readonly maxQueueTextRowSize: number;
   
   constructor() {
     this.db = new DJYurikaDB();
@@ -72,6 +73,7 @@ export class DJYurika {
     this.overrideConfigs = new Map<string, Config>();
     this.connections = new Map<string, BotConnection>();
     this.interval = environment.refreshInterval;
+    this.maxQueueTextRowSize = environment.maxQueueTextRows;
   }
 
   // ------- Client Initialization -------
@@ -779,7 +781,7 @@ export class DJYurika {
     this.updateNowPlayingProgrssbar(conn);
   }
   
-  private getQueue(message: Message, conn: BotConnection) {
+  private async getQueue(message: Message, conn: BotConnection) {
     if (!conn.queue || conn.queue.songs.length === 0) {
       return;
     }
@@ -787,12 +789,18 @@ export class DJYurika {
     const guildName = message.guild.name;
     let queueData: string[] = [];
     const currentSong = conn.queue.songs[0];
-    conn.queue.songs.slice(1).forEach((song, index) => {
+    // slice maximum 50(env value)
+    const length = conn.queue.songs.length - 1;
+    const promise = conn.queue.songs.slice(1, this.maxQueueTextRowSize+1).map((song, index) => {
       if (!queueData[Math.trunc(index / 5)]) {
         queueData[Math.trunc(index / 5)] = '';
       }
       queueData[Math.trunc(index / 5)] += `${index+1}. [${song?.title}](${song?.url})\n`;
     });
+    await Promise.all(promise);
+    if (length > 50) {
+      queueData[5] = `and ${length - this.maxQueueTextRowSize} more song(s)`;
+    }
   
     let loopStr = '';
     switch (conn.loopFlag) {
