@@ -956,10 +956,10 @@ export class DJYurika {
   
     let msg = await message.channel.send(embedMessage);
     msg.react(this.acceptEmoji).catch((err) => {
-      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+      console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
     });
     msg.react(this.denyEmoji).catch((err) => {
-      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+      console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
     });    
   
     const req = new LeaveRequest();
@@ -1020,10 +1020,10 @@ export class DJYurika {
     let msg = await message.channel.send(embedMessage);
     
     msg.react(this.acceptEmoji).catch((err) => {
-      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+      console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
     });
     msg.react(this.denyEmoji).catch((err) => {
-      console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
+      console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
     });
   
     const req = new MoveRequest();
@@ -1362,8 +1362,9 @@ export class DJYurika {
       conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
     }
     catch (err: any) {
-      console.error(err.message + ` (${song.url})`);
-      conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
+      console.error(err);
+      console.info('Song url was ' + song.url)
+      // conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
 
       conn.queue.songs.shift();
       this.play(guild, conn.queue.songs[0], conn);
@@ -1483,15 +1484,15 @@ export class DJYurika {
   
     conn.searchResultMsgs.set(msg.id, searchResult);
   
-    for (let index = 0; index < fields.length; index++) {
-      msg.react(this.selectionEmojis[index]).catch((err) => {
-        console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
-      });
+    try {
+      for (let index = 0; index < fields.length; index++) {
+        msg.react(this.selectionEmojis[index]).catch((err) => { throw Error(err) });
+      }
+      msg.react(this.cancelEmoji).catch((err) => { throw Error(err) });
     }
-    msg.react(this.cancelEmoji).catch((err) => {
+    catch (err) {
       console.error(`(${err.name}: ${err.message}) - Search message deleted already`);
-    });
-
+    }
   }
   
   private async getYoutubePlaylistInfo(url: string) {
