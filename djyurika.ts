@@ -1273,7 +1273,7 @@ export class DJYurika {
     }
   
     const dispatcher = conn.joinedVoiceConnection;
-  
+
     try {
       switch (song.source) {
         case SongSource.YOUTUBE:
@@ -1365,9 +1365,13 @@ export class DJYurika {
       console.error(err);
       console.info('Song url was ' + song.url)
       // conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
-
-      conn.queue.songs.shift();
-      this.play(guild, conn.queue.songs[0], conn);
+      if (dispatcher) {
+        conn.queue.songs.shift();
+        this.play(guild, conn.queue.songs[0], conn);
+      }
+      else {
+        console.error('Voice connection dispatcher is gone');
+      }
     }
   }
   
