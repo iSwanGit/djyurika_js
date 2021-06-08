@@ -738,8 +738,8 @@ export class DJYurika {
     playbar = playbar.join('');
     var remaintime: number | string = song.duration - playtime;
     if (song.duration >= 3600) {
-      playtime = `${Math.trunc(playtime / 3600), 2}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-      remaintime = `-${Math.trunc(remaintime / 3600), 2}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+      playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+      remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
     } else {
       playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
       remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
@@ -2180,8 +2180,8 @@ export class DJYurika {
           playbar = playbar.join('');
           var remaintime: number | string = song.duration - playtime;
           if (song.duration >= 3600) {
-            playtime = `${Math.trunc(playtime / 3600), 2}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-            remaintime = `-${Math.trunc(remaintime / 3600), 2}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+            playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+            remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
           } else {
             playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
             remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
