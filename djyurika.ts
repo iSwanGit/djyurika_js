@@ -1306,7 +1306,7 @@ export class DJYurika {
       switch (song.source) {
         case SongSource.YOUTUBE:
           dispatcher.play(await ytdl(song.url), { type: 'opus' })
-          .on("finish", () => {
+          .on("finish", async () => {
             console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
             const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
             if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
@@ -1315,6 +1315,14 @@ export class DJYurika {
                 `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
               );
             }
+
+            // if bot is alone and queue is empty, then stop
+            if (conn.joinedVoiceConnection.channel.members.size === 1 && conn.queue.songs.length === 1) {
+              const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+              this.stop(message, null);
+              return;
+            }
+
             conn.skipFlag = false;  // reset flag
             conn.recentNowPlayingMessage = null;
             switch (conn.loopFlag) {
