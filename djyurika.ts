@@ -1235,6 +1235,7 @@ export class DJYurika {
         case 'm.youtube.com':
         case 'www.youtu.be':
         case 'youtu.be':
+        case 'music.youtube.com':
           return SongSource.YOUTUBE;
         
         case 'soundcloud.app.goo.gl':
