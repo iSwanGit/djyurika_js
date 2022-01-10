@@ -124,8 +124,11 @@ export class DJYurika {
 
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
-      await this.refreshServerName();
-      await this.client.user.setActivity('Help: ~h', { type: 'PLAYING' });
+      this.refreshServerName();
+      this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
+      .then(() => setInterval(() => {
+        this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
+      }, 3600000));
       console.log('Ready!');
     });
     this.client.once('reconnecting', () => {
