@@ -85,9 +85,11 @@ export class DJYurika {
       this.registerMessageHandler();
       this.registerMessageReactionAddHandler();
       this.registerMessageReactionRemoveHandler();
+      this.registerGuildUpdateHandler();
+      this.registerGuildJoinHandler();
       
       await this.initConfig();
-      
+
       this.client.login(keys.botToken);
     }
     catch (err) {
@@ -134,18 +136,27 @@ export class DJYurika {
     });
   }
 
+  private registerGuildUpdateHandler() {
+    this.client.on('guildUpdate', (oldGuild, newGuild) => {
+      // 채널 및 역할 검증
+      // 서버 이름 변경 확인
+    });
+  }
+
+  private registerGuildJoinHandler() {
+    this.client.on('guildCreate', guild => {
+      console.log('guild add');
+      // 서버 추가시 안내할것
+      // 명령어채널 및 역할 등록 유도
+    });
+  }
+
   private registerMessageHandler() {
     this.client.on('message', async message => {
       
       // load config
-      let cfg: Config;
-      if (this.overrideConfigs.has(message.guild.id)) {
-        cfg = this.overrideConfigs.get(message.guild.id);
-      }
-      else {
-        cfg = this.serverConfigs.get(message.guild.id);
-      }
-
+      const cfg = this.overrideConfigs.get(message.guild.id) ?? this.serverConfigs.get(message.guild.id);
+      
       // load bot connection
       let conn = this.connections.get(message.guild.id);
       if (!conn) {
@@ -269,8 +280,8 @@ export class DJYurika {
   }
   private registerMessageReactionAddHandler() {
     this.client.on('messageReactionAdd', async (reaction: MessageReaction, user: User) => {
-      const servOpt = this.serverConfigs.get(reaction.message.guild.id);
       const conn = this.connections.get(reaction.message.guild.id);
+      const servOpt = conn.config;
     
       const reactedUser = reaction.message.guild.members.cache.get(user.id);
       var selectedMsg: SearchResult | MoveRequest | LeaveRequest | AddPlaylistConfirmList;
@@ -604,7 +615,7 @@ export class DJYurika {
   }
 
   private sendHelp(message: Message) {
-    const opt = this.serverConfigs.get(message.guild.id);
+    const opt = this.connections.get(message.guild.id).config;
     const cmdName = '명령어';
     let cmdValue: string;
     if (checkDeveloperRole(message.member, opt)) {
@@ -1283,7 +1294,7 @@ export class DJYurika {
             const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
             if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
               console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-              (guild.channels.cache.get(this.serverConfigs.get(guild.id).commandChannelID) as TextChannel).send(
+              (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
                 `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
               );
             }

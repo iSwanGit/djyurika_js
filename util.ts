@@ -10,14 +10,14 @@ export function fillZeroPad(num: number, width: number) {
 
 export function checkDeveloperRole(member: GuildMember, cfg: Config) {
   return member.roles.cache.find(role => {    
-    if (!cfg.developerRoleID) return true;  // undefined always pass
+    if (!cfg?.developerRoleID) return true;  // undefined always pass
     return role?.id === cfg.developerRoleID;
   });
 }
 
 export function checkModeratorRole(member: GuildMember, cfg: Config) {
   return member.roles.cache.find(role => {
-    if (!cfg.moderatorRoleID) return true;  // undefined always pass
+    if (!cfg?.moderatorRoleID) return true;  // undefined always pass
     return role?.id === cfg.moderatorRoleID;
   });
 }
