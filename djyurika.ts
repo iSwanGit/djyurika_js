@@ -861,23 +861,85 @@ export class DJYurika {
    
   }
   
+  /**
+   * 대기열에서 노래 삭제하는 명령 처리 entrypoint
+   * @param message 
+   * @param conn 
+   * @returns 
+   */
   private deleteSong(message: Message, conn: BotConnection) {
     const args = message.content.split(' ');
     if (args.length < 2) {
-      return message.channel.send('`~d <queue_index>`');
+      return message.channel.send('`~d <queue_index>` or `~d <index_from>~<index_to>`');
     }
     if (!conn.queue || conn.queue.songs.length <= 1) {
       return message.channel.send('⚠ `대기열이 비었음`');
     }
   
-    const index = parseInt(args[1]);
-    if (isNaN(index) || index < 1 || index > conn.queue.songs.length) {
-      return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+    try {
+      let indexFrom: number;
+      let indexTo: number;
+      
+      const rangeArg = args[1].split('~');
+
+      // multiple (not range)
+      if (args.length > 2) {
+        if (rangeArg.length > 1) {  // range
+          message.channel.send('⚠ `index and range (mixed) selection are not supported together`');
+          throw Error;
+        }
+
+        // remove duplication and parse
+        const indexList = [...new Set<number>(args.slice(1).map(v => parseInt(v)))];
+        if (indexList.some(v => isNaN(v))) {
+          throw Error;
+        }
+        
+        // sort desc
+        indexList.sort((a, b) => b - a);
+
+        const result = this.deleteMultiplePick(conn, indexList);
+        const length = result.length;
+        if (length > 0) {
+          return message.channel.send(`❎ \`대기열에서 ${length}곡 삭제: ${result[0]?.title} 외 ${length - 1}곡\``);
+        }
+        else {
+          return message.channel.send('⚠ `곡이 삭제되지 않음`');
+        }
+      }
+      
+      // range
+      if (rangeArg.length === 2) {
+        indexFrom = parseInt(rangeArg[0]);
+        indexTo = parseInt(rangeArg[1]);
+        
+        if (isNaN(indexFrom) || isNaN(indexTo) || indexFrom < 1 || indexFrom > indexTo || indexFrom > conn.queue.songs.length) {
+          throw Error;
+        }
+      }
+      // single
+      else {
+        indexFrom = parseInt(args[1]);
+        if (isNaN(indexFrom) || indexFrom < 1 || indexFrom > conn.queue.songs.length) {
+          throw Error;
+        }
+      }
+
+      // range, single 모두 대응
+      const removedSong = this.deleteRange(conn, indexFrom, indexTo);
+      const length = removedSong.length;
+      if (!indexTo || length === 1) {
+        message.channel.send(`❎ \`대기열 ${indexFrom}번째 삭제: ${removedSong[0]?.title}\``);   
+      }
+      else if (length > 1) {
+        message.channel.send(`❎ \`대기열 ${indexFrom}~${indexTo}번째 삭제: ${removedSong[0]?.title} 외 ${length - 1}곡\``);   
+      }
+      else {
+        return message.channel.send('⚠ `곡이 삭제되지 않음`');
+      }
     }
-  
-    const removedSong = conn.queue.songs.splice(index, 1);
-    if (removedSong) {
-      message.channel.send(`❎ \`대기열 ${index}번째 삭제: ${removedSong[0]?.title}\``);   
+    catch (e) {
+      return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
     }
   }
   
@@ -976,7 +1038,7 @@ export class DJYurika {
   }
 
   /**
-   * 노래 처음부터 다시 시작 entrypoint
+   * 노래 처음부터 다시 시작하는 명령어 처리 entrypoint
    * @param message 
    * @param conn 
    */
@@ -1200,6 +1262,34 @@ export class DJYurika {
   }
   
   // --- internal
+  
+  /**
+   * 삭제할 대기열 인덱스 (1개 이상 선택)
+   * @param conn 
+   * @param indexList 
+   * @returns 
+   */
+  private deleteMultiplePick(conn: BotConnection, indexList: number[]) {
+    const removedSongs: Song[] = [];
+    for (const index of indexList) {
+      removedSongs.unshift(...conn.queue.songs.splice(index, 1));
+    }
+
+    return removedSongs;
+  }
+
+  /**
+   * 삭제할 대기열 인덱스 범위 (연속된 범위)
+   * @param conn 
+   * @param from 
+   * @param to 
+   * @returns 
+   */
+  private deleteRange(conn: BotConnection, from: number, to?: number) {
+    // include this 'to' index!
+    const deleteLength = to ? to - from + 1 : 1;
+    return conn.queue.songs.splice(from, deleteLength);
+  }
   
   private onDisconnect(conn: BotConnection) {
     const serverId = conn.joinedVoiceConnection.channel.guild.id;
