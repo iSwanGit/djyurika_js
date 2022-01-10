@@ -200,6 +200,11 @@ export class DJYurika {
         case 'ㅣ':
           this.requestStop(message, conn, cfg);
           break;
+
+        case 'r':
+        case 'ㄱ':
+          this.restartSong(message, conn);
+          break;
     
         case 'loop':
           this.setLoop(message, conn, LoopType.SINGLE);
@@ -968,6 +973,28 @@ export class DJYurika {
     req.voiceChannel = voiceChannel;
   
     conn.leaveRequestList.set(msg.id, req);
+  }
+
+  /**
+   * 노래 처음부터 다시 시작 entrypoint
+   * @param message 
+   * @param conn 
+   */
+  private restartSong(message: Message, conn: BotConnection) {    
+    if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceConnection || !conn.joinedVoiceConnection.dispatcher) {
+      return;
+    }
+
+    const serverName = conn.joinedVoiceConnection.channel.guild.name;
+
+    // same as normal finish(end)
+    // 재생위치 컨트롤하는 게 없어서 이어붙이는 것으로
+    const song = conn.queue.songs[0];
+    console.log(`[${serverName}] ` + `노래 재시작: ${song.title} (${song.id})`);
+
+    conn.skipFlag = true;
+    conn.queue.songs.unshift(song);
+    conn.joinedVoiceConnection.dispatcher.end();
   }
   
   private async requestMove(message: Message, conn: BotConnection, cfg: Config) {
