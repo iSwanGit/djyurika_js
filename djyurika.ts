@@ -552,6 +552,14 @@ export class DJYurika {
       const conn = this.connections.get(oldState.guild.id);
       
       if (!conn?.joinedVoiceChannel) return;
+
+      // if bot (disconnected by discord(guild admin))
+      // 바로 연결끊기 해버린 경우 여기서 잡아내야함
+      if (oldState.member.id === this.client.user.id && !newState.channel) {
+        // 봇이 나가진 경우
+        getVoiceConnection(oldState.guild.id).destroy();
+        return;
+      }
     
       let state: UpdatedVoiceState;
       // discriminate voice state
@@ -928,7 +936,7 @@ export class DJYurika {
         return message.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
       }
       catch (err) {
-        console.error('serserser', err);
+        console.error(err);
       }
     }
    
@@ -1412,6 +1420,7 @@ export class DJYurika {
   }
   
   private onDisconnect(conn: BotConnection) {
+    // if (!conn.joinedVoiceChannel) return;
     const serverId = conn.joinedVoiceChannel.guild.id;
     const serverName = conn.joinedVoiceChannel.guild.name;
     if (conn.joinedVoiceChannel && conn.subscription) {
@@ -1872,7 +1881,10 @@ export class DJYurika {
         connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
         })
-        .on(VoiceConnectionStatus.Destroyed, () => {
+        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
+          // console.log(oldState.status, newState.status);
+        })
+        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
           this.onDisconnect(conn);
         });
         conn.joinedVoiceChannel = voiceChannel;
@@ -2155,7 +2167,10 @@ export class DJYurika {
         connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
         })
-        .on(VoiceConnectionStatus.Destroyed, () => {
+        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
+          // console.log(oldState.status, newState.status);
+        })
+        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
           this.onDisconnect(conn);
         });
         conn.joinedVoiceChannel = voiceChannel;
@@ -2330,7 +2345,10 @@ export class DJYurika {
         connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
         })
-        .on(VoiceConnectionStatus.Destroyed, () => {
+        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
+          // console.log(oldState.status, newState.status);
+        })
+        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
           this.onDisconnect(conn);
         });
         conn.joinedVoiceChannel = voiceChannel;
@@ -2464,20 +2482,11 @@ export class DJYurika {
     try {
       console.log(`[${voiceChannel.guild.name}] ` + '음성 채널 이동 중...');
       commandChannel.send(`🔗 \`연결: ${voiceChannel.name}\``);
-      
-      const connection = joinVoiceChannel({
-        channelId: voiceChannel.id,
-        guildId: voiceChannel.guild.id,
-        // .d.ts type issue
-        adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-      });
-      
-      connection.once(VoiceConnectionStatus.Ready, () => {
-        console.info(`[${voiceChannel.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
-      })
-      .on(VoiceConnectionStatus.Destroyed, () => {
-        this.onDisconnect(conn);
-      });
+
+      // change channel
+      await voiceChannel.guild.me.voice.setChannel(voiceChannel);
+      console.info(`[${voiceChannel.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
+
       conn.joinedVoiceChannel = voiceChannel;
       conn.channelJoinRequestMember = triggeredMember;
       // delete message
