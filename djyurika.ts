@@ -363,7 +363,7 @@ export class DJYurika {
         }
       
         const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
-        if (selected >= environment.maxSearchResults * 2) return;  // ignore other reaction
+        if (selected < 0 || selected >= environment.maxSearchResults * 2) return;  // ignore other reaction
         const [type, url] = selectedMsg.songUrls[selected];
 
         switch (type) {
