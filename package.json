@@ -28,5 +28,6 @@
   },
   "devDependencies": {
     "@types/request-promise-native": "^1.0.17"
+    "eslint": "^8.6.0"
   }
 }
