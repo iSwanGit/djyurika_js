@@ -895,7 +895,7 @@ export class DJYurika {
       .setColor('#FFC0CB')
       .addFields(
         {
-          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name + conn.subscription.player.state.status === AudioPlayerStatus.Paused ? ' (일시 정지됨)' : '',
+          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name + (conn.subscription.player.state.status === AudioPlayerStatus.Paused ? ' (일시 정지됨)' : ''),
           value: nowPlayingStr,
           inline: false,
         },
@@ -1869,7 +1869,7 @@ export class DJYurika {
           adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
         });
         
-        connection.on(VoiceConnectionStatus.Ready, () => {
+        connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
         })
         .on(VoiceConnectionStatus.Destroyed, () => {
@@ -2152,7 +2152,7 @@ export class DJYurika {
           adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
         });
         
-        connection.on(VoiceConnectionStatus.Ready, () => {
+        connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
         })
         .on(VoiceConnectionStatus.Destroyed, () => {
@@ -2327,11 +2327,8 @@ export class DJYurika {
           adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
         });
         
-        connection.on(VoiceConnectionStatus.Ready, () => {
+        connection.once(VoiceConnectionStatus.Ready, () => {
           console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        })
-        .on(VoiceConnectionStatus.Disconnected, () => {
-          this.onDisconnect(conn);
         })
         .on(VoiceConnectionStatus.Destroyed, () => {
           this.onDisconnect(conn);
@@ -2465,21 +2462,18 @@ export class DJYurika {
   
   private async moveVoiceChannel(conn: BotConnection, message: Message | PartialMessage, triggeredMember: GuildMember, commandChannel: DMChannel | PartialDMChannel | NewsChannel | TextChannel | ThreadChannel, voiceChannel: VoiceBasedChannel) {
     try {
-      console.log(`[${message.guild.name}] ` + '음성 채널 이동 중...');
+      console.log(`[${voiceChannel.guild.name}] ` + '음성 채널 이동 중...');
       commandChannel.send(`🔗 \`연결: ${voiceChannel.name}\``);
       
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
-        guildId: message.guild.id,
+        guildId: voiceChannel.guild.id,
         // .d.ts type issue
         adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
       });
       
-      connection.on(VoiceConnectionStatus.Ready, () => {
-        console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
-      })
-      .on(VoiceConnectionStatus.Disconnected, () => {
-        this.onDisconnect(conn);
+      connection.once(VoiceConnectionStatus.Ready, () => {
+        console.info(`[${voiceChannel.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
       })
       .on(VoiceConnectionStatus.Destroyed, () => {
         this.onDisconnect(conn);
