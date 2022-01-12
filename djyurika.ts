@@ -810,7 +810,7 @@ export class DJYurika {
   
     const embedMessage = new MessageEmbed()
       .setAuthor({
-        name: `${conn.joinedVoiceChannel.name} 에서 재생 중`,
+        name: `${conn.joinedVoiceChannel.name} 에서 재생 중 ${conn.subscription.player.state.status === AudioPlayerStatus.Paused ? '(일시 정지됨)' : ''}`,
         iconURL: message.guild.me.user.avatarURL(),
         url: song.url
       })
@@ -895,7 +895,7 @@ export class DJYurika {
       .setColor('#FFC0CB')
       .addFields(
         {
-          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name,
+          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name + conn.subscription.player.state.status === AudioPlayerStatus.Paused ? ' (일시 정지됨)' : '',
           value: nowPlayingStr,
           inline: false,
         },
