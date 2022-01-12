@@ -1,9 +1,12 @@
-import { VoiceConnection, GuildMember, Message } from "discord.js";
-import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType } from ".";
+import { GuildMember, Message, VoiceBasedChannel } from 'discord.js';
+import { AudioResource, PlayerSubscription, VoiceConnection } from '@discordjs/voice';
+import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType } from '.';
 
 export class BotConnection {
   queue: SongQueue;
-  joinedVoiceConnection: VoiceConnection;
+  joinedVoiceChannel: VoiceBasedChannel;
+  subscription: PlayerSubscription;
+  currentAudioResource: AudioResource;
   channelJoinRequestMember: GuildMember;
   recentNowPlayingMessage: Message;
   intervalHandler: NodeJS.Timeout;

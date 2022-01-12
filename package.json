@@ -1,6 +1,6 @@
 {
   "name": "djyurika-js",
-  "version": "2.2.7",
+  "version": "2.3.0",
   "description": "DJ Yurika JavaScript ver.",
   "main": "app.ts",
   "scripts": {
@@ -10,13 +10,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@discordjs/opus": "^0.4.0",
+    "@discordjs/opus": "^0.7.0",
+    "@discordjs/rest": "^0.2.0-canary.0",
+    "@discordjs/voice": "^0.7.5",
     "@types/console-stamp": "^0.2.33",
     "@types/node": "^14.14.44",
     "console-stamp": "^3.0.2",
-    "discord.js": "^12.5.3",
+    "discord-api-types": "^0.26.1",
+    "discord.js": "^13.5.1",
+    "ffmpeg-static": "^4.4.1",
     "mariadb": "^2.5.3",
     "node-opus": "^0.3.3",
+    "opusscript": "^0.0.8",
     "request": "^2.88.2",
     "request-promise-native": "^1.0.9",
     "soundcloud-downloader": "^0.2.4",
@@ -27,7 +32,7 @@
     "ytpl": "^2.2.1"
   },
   "devDependencies": {
-    "@types/request-promise-native": "^1.0.17"
+    "@types/request-promise-native": "^1.0.17",
     "eslint": "^8.6.0"
   }
 }

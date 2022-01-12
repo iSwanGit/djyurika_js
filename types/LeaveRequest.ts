@@ -1,8 +1,8 @@
-import { GuildMember, Message, VoiceChannel } from "discord.js";
+import { GuildMember, Message, VoiceBasedChannel } from "discord.js";
 
 export class LeaveRequest {
   message: Message;
   reqUser: GuildMember;
-  voiceChannel: VoiceChannel;
+  voiceChannel: VoiceBasedChannel;
   acceptedMemberIds = new Array<string>();
 }

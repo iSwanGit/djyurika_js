@@ -1,4 +1,6 @@
-import { Client, DMChannel, Guild, GuildMember, Message, MessageEmbed, MessageReaction, NewsChannel, TextChannel, User, VoiceChannel } from 'discord.js';
+import { Client, DMChannel, EmbedFieldData, Guild, GuildMember, Intents, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, TextChannel, ThreadChannel, User, VoiceBasedChannel, VoiceChannel } from 'discord.js';
+import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus, PlayerSubscription, StreamType, NoSubscriberBehavior } from '@discordjs/voice';
+
 import ytdl from 'ytdl-core-discord';
 import ytdlc, { videoInfo } from 'ytdl-core';  // for using type declaration
 import ytpl from 'ytpl';
@@ -70,7 +72,16 @@ export class DJYurika {
   
   constructor() {
     this.db = new DJYurikaDB();
-    this.client = new Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION'] });
+    this.client = new Client({ intents: [
+      Intents.FLAGS.GUILDS,
+      Intents.FLAGS.GUILD_INVITES,
+      Intents.FLAGS.GUILD_PRESENCES,
+      Intents.FLAGS.GUILD_MESSAGES,
+      Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+      Intents.FLAGS.GUILD_EMOJIS_AND_STICKERS,      
+      Intents.FLAGS.GUILD_VOICE_STATES,
+    ]});
+    // this.client = new Client({ partials: ['MESSAGE', 'CHANNEL', 'REACTION'] });
     this.defaultConfig = environment.defaultConfig as Config;
     this.serverConfigs = new Map<string, Config>();
     this.overrideConfigs = new Map<string, Config>();
@@ -129,9 +140,9 @@ export class DJYurika {
     this.client.once('ready', async () => {
       this.refreshServerName();
       this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
-      .then(() => setInterval(() => {
+      setInterval(() => {
         this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
-      }, 3600000));
+      }, 3600000);
       console.log('Ready!');
     });
     this.client.once('reconnecting', () => {
@@ -158,8 +169,7 @@ export class DJYurika {
   }
 
   private registerMessageHandler() {
-    this.client.on('message', async message => {
-      
+    this.client.on('messageCreate', async (message) => {
       // load config
       const cfg = this.overrideConfigs.get(message.guild.id) ?? this.serverConfigs.get(message.guild.id);
       
@@ -180,14 +190,16 @@ export class DJYurika {
       // need help?
       const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
       if (cmd === 'h') {
-        return this.sendHelp(message);
+        this.sendHelp(message);
+        return;
       }
     
       // check sender is in voice channel (except moderator and developer)
       const voiceChannel = message.member.voice.channel;
       if (!(checkDeveloperRole(message.member, cfg) || checkModeratorRole(message.member, cfg))) {
         if (!voiceChannel) {
-          return message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
+          message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
+          return;
         }
       }
     
@@ -289,6 +301,7 @@ export class DJYurika {
       }
     });
   }
+
   private registerMessageReactionAddHandler() {
     this.client.on('messageReactionAdd', async (reaction: MessageReaction, user: User) => {
       const conn = this.connections.get(reaction.message.guild.id);
@@ -363,7 +376,7 @@ export class DJYurika {
         }
     
         // vote
-        const currentJoinedUsers = conn.joinedVoiceConnection.channel.members;
+        const currentJoinedUsers = conn.joinedVoiceChannel.members;
         if (reaction.emoji.name === this.acceptEmoji) {
           if (!selectedMsg.acceptedMemberIds.includes(user.id)) {
             selectedMsg.acceptedMemberIds.push(user.id);
@@ -404,7 +417,7 @@ export class DJYurika {
         }
     
         // vote
-        const currentJoinedUsers = conn.joinedVoiceConnection.channel.members;
+        const currentJoinedUsers = conn.joinedVoiceChannel.members;
         if (reaction.emoji.name === this.acceptEmoji) {
           if (!selectedMsg.acceptedMemberIds.includes(user.id)) {
             selectedMsg.acceptedMemberIds.push(user.id);
@@ -423,7 +436,7 @@ export class DJYurika {
             // send message
             reaction.message.channel.send('🔊 과반수 동의, 그럼 20000 들어가보겠습니다');
             // leave
-            this.stop(reaction.message, reaction.message.id);
+            this.stop(reaction.message, reaction.message.id, conn);
           }
         }
         return;
@@ -516,29 +529,29 @@ export class DJYurika {
     this.client.on('voiceStateUpdate', (oldState, newState) => {
       const conn = this.connections.get(oldState.guild.id);
       
-      if (!conn?.joinedVoiceConnection) return;
+      if (!conn?.joinedVoiceChannel) return;
     
       let state: UpdatedVoiceState;
       // discriminate voice state
-      if (oldState.channel?.id === conn.joinedVoiceConnection.channel.id && newState.channel?.id !== conn.joinedVoiceConnection.channel.id) {
+      if (oldState.channel?.id === conn.joinedVoiceChannel.id && newState.channel?.id !== conn.joinedVoiceChannel.id) {
         // 나감
         state = UpdatedVoiceState.OUT;
-        console.log(`[${oldState.guild.name}] ` + oldState.member.displayName + ' leaved ' + conn.joinedVoiceConnection.channel.name);
+        console.log(`[${oldState.guild.name}] ` + oldState.member.displayName + ' leaved ' + conn.joinedVoiceChannel.name);
         if (oldState.member.id === conn.channelJoinRequestMember?.id) {
           conn.channelJoinRequestMember = null;
           console.info(oldState.member.displayName + ' was summoner');
         }
       }
-      else if (!oldState.channel && newState.channel?.id === conn.joinedVoiceConnection.channel.id) {
+      else if (!oldState.channel && newState.channel?.id === conn.joinedVoiceChannel.id) {
         state = UpdatedVoiceState.IN;
-        console.log(`[${oldState.guild.name}] ` + oldState.member.displayName + ' joined ' + conn.joinedVoiceConnection.channel.name);
+        console.log(`[${oldState.guild.name}] ` + oldState.member.displayName + ' joined ' + conn.joinedVoiceChannel.name);
       }
       else {
         state = UpdatedVoiceState.NONE;
       }
     
       // vote re-calculate
-      const currentJoinedUsers = conn.joinedVoiceConnection.channel.members;
+      const currentJoinedUsers = conn.joinedVoiceChannel.members;
       // current count
       conn.moveRequestList.forEach((req, msgId, list) => {
         // 채널 소환자가 나가면
@@ -574,7 +587,7 @@ export class DJYurika {
           conn.leaveRequestList.delete(key);
         }
         // if my voice channel has changed(req channel is different), ignore all
-        else if (conn.joinedVoiceConnection.channel.id !== req.voiceChannel.id) {
+        else if (conn.joinedVoiceChannel.id !== req.voiceChannel.id) {
           req.message.edit('⚠ `요청 취소됨 (DJ Yurika 채널 이동)`');
           req.message.suppressEmbeds();
           req.message.reactions.removeAll();
@@ -593,7 +606,7 @@ export class DJYurika {
             if (acceptedVoiceMemberCount) {
               req.message.channel.send('🔊 `인원수 변동으로 인한 과반수 동의, 그럼 20000 들어가보겠습니다`');
             }
-            this.stop(req.message, req.message.id);
+            this.stop(req.message, req.message.id, conn);
             conn.leaveRequestList.clear();
             break;
           }
@@ -640,7 +653,11 @@ export class DJYurika {
     }
   
     const embedMessage = new MessageEmbed()
-      .setAuthor('사용법', message.guild.me.user.avatarURL(), environment.githubRepoUrl)
+      .setAuthor({
+        name: '사용법',
+        iconURL: message.guild.me.user.avatarURL(),
+        url: environment.githubRepoUrl
+      })
       .setColor('#ffff00')
       .addFields(
         {
@@ -649,13 +666,13 @@ export class DJYurika {
         },
       );
   
-    return message.channel.send(embedMessage);
+    return message.channel.send({ embeds: [embedMessage] });
   }
 
-  private async execute(message: Message, conn: BotConnection) {
+  private async execute(message: Message | PartialMessage, conn: BotConnection) {
     const args = message.content.split(' ');
   
-    if (args.length < 2 && conn.joinedVoiceConnection) {
+    if (args.length < 2 && conn.joinedVoiceChannel) {
       return message.channel.send('`~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
     }
   
@@ -669,7 +686,7 @@ export class DJYurika {
   
       // check permission of voice channel
       const permissions = voiceChannel.permissionsFor(message.client.user);
-      if (!conn.joinedVoiceConnection && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
+      if (!conn.joinedVoiceChannel && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
         return message.channel.send('```cs\n'+
         '# Error: 요청 음성채널 권한 없음\n'+
         '```');
@@ -677,7 +694,7 @@ export class DJYurika {
     }
 
     // first ~p, then random pick
-    if (args.length === 1 && !conn.joinedVoiceConnection) {
+    if (args.length === 1 && !conn.joinedVoiceChannel) {
       try {
         const randSong = await this.selectRandomSong(message.guild);
         console.log('Play request with no args, pick random one');
@@ -724,7 +741,7 @@ export class DJYurika {
     }
   }
 
-  private skip(message: Message, conn: BotConnection) {
+  private skip(message: Message | PartialMessage, conn: BotConnection) {
     if (!message.member.voice.channel)
       return message.channel.send(
         'You have to be in a voice channel to stop the music!'
@@ -740,42 +757,49 @@ export class DJYurika {
       conn.loopFlag = LoopType.NONE;
       message.channel.send('🔂 `한곡 반복 해제됨`');
     }
-    if (conn.joinedVoiceConnection && conn.joinedVoiceConnection.dispatcher) {
-      conn.joinedVoiceConnection.dispatcher.end();
+    if (conn.joinedVoiceChannel && conn.subscription.player) {
+      // conn.subscription.unsubscribe();
+      conn.subscription.player.stop();
     }
   }
   
-  private async nowPlaying(message: Message, conn: BotConnection) {
-    if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceConnection || !conn.joinedVoiceConnection.dispatcher) {
+  private async nowPlaying(message: Message | PartialMessage, conn: BotConnection) {
+    if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceChannel || !conn.subscription?.player) {
       return;
     }
   
     const song = conn.queue.songs[0];
     if (!song) return message.channel.send('`Error: song object not defined`');  // prevent error
     // calculate current playtime. 1/3 scale
-    var playtime: number | string = conn.joinedVoiceConnection.dispatcher.streamTime / 1000;
-    const currentPoint = Math.round(playtime / song.duration * 100 / 4);
-    var playbar: string[] | string = Array(26).fill('▬');
-    playbar[currentPoint] = '🔘';
-    playbar = playbar.join('');
-    var remaintime: number | string = song.duration - playtime;
-    if (song.duration >= 3600) {
-      playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-      remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-    } else {
-      playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-      remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-    }
+    // conn.subscription.player.playable
+    // var playtime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
+    // const currentPoint = Math.round(playtime / song.duration * 100 / 4);
+    // var playbar: string[] | string = Array(26).fill('▬');
+    // playbar[currentPoint] = '🔘';
+    // playbar = playbar.join('');
+    // var remaintime: number | string = song.duration - playtime;
+    // if (song.duration >= 3600) {
+    //   playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+    //   remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+    // } else {
+    //   playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+    //   remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+    // }
   
     const embedMessage = new MessageEmbed()
-      .setAuthor(`${conn.joinedVoiceConnection.channel.name} 에서 재생 중`, message.guild.me.user.avatarURL(), song.url)
+      .setAuthor({
+        name: `${conn.joinedVoiceChannel.name} 에서 재생 중`,
+        iconURL: message.guild.me.user.avatarURL(),
+        url: song.url
+      })
       .setColor('#0000ff')
       .setDescription(`[${song.title}](${song.url})`)
       .setThumbnail(song.thumbnail)
       .addFields(
         {
           name: '\u200B', // invisible zero width space
-          value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+          value:  `**선곡: <@${song.requestUserId}>**`, // playbar
+          // value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
           inline: false,
         },
         {
@@ -792,18 +816,24 @@ export class DJYurika {
   
     switch (song.source) {
       case SongSource.YOUTUBE:
-        embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
+        embedMessage.setFooter({
+          text: 'Youtube', 
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+        });
         break;
       case SongSource.SOUNDCLOUD:
-        embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
+        embedMessage.setFooter({
+          text: 'SoundCloud',
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+        });
         break;
     }
     
-    conn.recentNowPlayingMessage = await message.channel.send(embedMessage);
+    conn.recentNowPlayingMessage = await message.channel.send({ embeds: [embedMessage] });
     this.updateNowPlayingProgrssbar(conn);
   }
   
-  private async getQueue(message: Message, conn: BotConnection) {
+  private async getQueue(message: Message | PartialMessage, conn: BotConnection) {
     if (!conn.queue || conn.queue.songs.length === 0) {
       return;
     }
@@ -835,11 +865,15 @@ export class DJYurika {
     }
     const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + loopStr;
     const embedMessage = new MessageEmbed()
-      .setAuthor(`${guildName}의 재생목록`, message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
+      .setAuthor({
+        name: `${guildName}의 재생목록`,
+        iconURL: message.guild.me.user.avatarURL(),
+        url: message.guild.me.user.avatarURL()
+      })
       .setColor('#FFC0CB')
       .addFields(
         {
-          name: '지금 재생 중: ' + conn.joinedVoiceConnection.channel.name,
+          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name,
           value: nowPlayingStr,
           inline: false,
         },
@@ -856,23 +890,23 @@ export class DJYurika {
       }
     }
   
-    return message.channel.send(embedMessage);
+    return message.channel.send({ embeds: [embedMessage] });
   }
   
-  private stop(message: Message, delMsgId: string) {
+  private stop(message: Message | PartialMessage, delMsgId: string, conn: BotConnection) {
     const voiceState = message.guild.me.voice;
-    const voiceChannel = voiceState?.channel;
     // onDisconnect callback will do clear queue
     if (voiceState !== undefined) {
       try {
-        voiceChannel.leave();
+        // conn.subscription.unsubscribe();
+        getVoiceConnection(message.guild.id).destroy();
         if (delMsgId) {
           message.channel.messages.fetch(delMsgId).then(msg => msg.delete());
         }
         return message.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
       }
       catch (err) {
-        console.error(err);
+        console.error('serserser', err);
       }
     }
    
@@ -884,7 +918,7 @@ export class DJYurika {
    * @param conn 
    * @returns 
    */
-  private deleteSong(message: Message, conn: BotConnection) {
+  private deleteSong(message: Message | PartialMessage, conn: BotConnection) {
     const args = message.content.split(' ');
     if (args.length < 2) {
       return message.channel.send('`~d <queue_index>` or `~d <index_from>~<index_to>`');
@@ -960,7 +994,7 @@ export class DJYurika {
     }
   }
   
-  private modifyOrder(message: Message, conn: BotConnection) {
+  private modifyOrder(message: Message | PartialMessage, conn: BotConnection) {
     const args = message.content.split(' ');
     if (args.length < 3) {
       return message.channel.send('`~m <target_index> <new_index>`');
@@ -987,7 +1021,7 @@ export class DJYurika {
     message.channel.send('✅ `순서 변경 완료`');
   }
   
-  private async requestStop(message: Message, conn: BotConnection, cfg: Config) {
+  private async requestStop(message: Message | PartialMessage, conn: BotConnection, cfg: Config) {
     const voiceState = message.guild.me.voice;
     const voiceChannel = voiceState?.channel;
     if (!conn.queue || conn.queue.songs.length === 0) {
@@ -997,7 +1031,7 @@ export class DJYurika {
     // if no summoner, channel summoner, moderator or developer, do stop
     if (!conn.channelJoinRequestMember || conn.channelJoinRequestMember?.id === message.member.id
         || checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
-      return this.stop(message, null);
+      return this.stop(message, null, conn);
     }
     // ignore if user is not in my voice channel
     if (message.member.voice.channel.id !== voiceChannel.id) {
@@ -1005,30 +1039,33 @@ export class DJYurika {
     }
     // if there are only bot or, bot and user, do stop. 3포함은 과반수때문에 어차피 걸림
     if (voiceChannel.members.size <= 3) {
-      return this.stop(message, null);
+      return this.stop(message, null, conn);
     }
   
     // 요청한 사람 수가 지금 요청까지 해서 과반수 도달할때, do stop
-    const currentJoinedUsers = conn.joinedVoiceConnection.channel.members;
+    const currentJoinedUsers = conn.joinedVoiceChannel.members;
     const minimumAcceptCount = Math.round((currentJoinedUsers.size-1) / 2);  // except bot
     let acceptedVoiceMemberCount = 0;
     conn.leaveRequestList.forEach((req, msgId) => {
-      if (req.voiceChannel.id === conn.joinedVoiceConnection.channel.id) {
+      if (req.voiceChannel.id === conn.joinedVoiceChannel.id) {
         acceptedVoiceMemberCount++;
       }
     })
     if (acceptedVoiceMemberCount + 1 >= minimumAcceptCount) {
-      return this.stop(message, null);
+      return this.stop(message, null, conn);
     }
   
     // request vote
     const embedMessage = new MessageEmbed()
-    .setAuthor('중지 요청', message.author.avatarURL())  
+    .setAuthor({
+      name: '중지 요청',
+      iconURL: message.author.avatarURL()
+    })  
     .setDescription(`Requested by <@${message.member.id}>`)
     .addFields(
       {
         name: '현재 채널',
-        value:  conn.joinedVoiceConnection.channel.name,
+        value:  conn.joinedVoiceChannel.name,
         inline: true,
       },
       {
@@ -1038,7 +1075,7 @@ export class DJYurika {
       },
     );  
   
-    let msg = await message.channel.send(embedMessage);
+    let msg = await message.channel.send({ embeds: [embedMessage] });
     msg.react(this.acceptEmoji).catch((err) => {
       console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
     });
@@ -1059,12 +1096,12 @@ export class DJYurika {
    * @param message 
    * @param conn 
    */
-  private restartSong(message: Message, conn: BotConnection) {    
-    if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceConnection || !conn.joinedVoiceConnection.dispatcher) {
+  private restartSong(message: Message | PartialMessage, conn: BotConnection) {    
+    if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceChannel || !conn.subscription?.player) {
       return;
     }
 
-    const serverName = conn.joinedVoiceConnection.channel.guild.name;
+    const serverName = conn.joinedVoiceChannel.guild.name;
 
     // same as normal finish(end)
     // 재생위치 컨트롤하는 게 없어서 이어붙이는 것으로
@@ -1073,12 +1110,14 @@ export class DJYurika {
 
     conn.skipFlag = true;
     conn.queue.songs.unshift(song);
-    conn.joinedVoiceConnection.dispatcher.end();
+
+    // conn.subscription.unsubscribe();
+    conn.subscription.player.stop();
   }
   
-  private async requestMove(message: Message, conn: BotConnection, cfg: Config) {
+  private async requestMove(message: Message | PartialMessage, conn: BotConnection, cfg: Config) {
     // check DJ Yurika joined voice channel
-    if (!conn.joinedVoiceConnection || !conn.queue || conn.queue.songs.length === 0) {
+    if (!conn.joinedVoiceChannel || !conn.queue || conn.queue.songs.length === 0) {
       return;
     }
   
@@ -1090,25 +1129,28 @@ export class DJYurika {
     }
   
     // check djyurika and user are in same voice channel
-    if (conn.joinedVoiceConnection.channel.id === userVoiceChannel.id) {
+    if (conn.joinedVoiceChannel.id === userVoiceChannel.id) {
       return;
     }
   
     // move if no summoner, summoner's request, or if no one in current voice channel
     if (!conn.channelJoinRequestMember || message.member.id === conn.channelJoinRequestMember?.id
-        || conn.joinedVoiceConnection.channel.members.size === 1 || checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+        || conn.joinedVoiceChannel.members.size === 1 || checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
       this.moveVoiceChannel(conn, null, message.member, message.channel, userVoiceChannel);
       return;
     }
   
     const embedMessage = new MessageEmbed()
-    .setAuthor('음성채널 이동 요청', message.author.avatarURL())
+    .setAuthor({
+      name: '음성채널 이동 요청',
+      iconURL: message.author.avatarURL()
+    })
     .setColor('#39c5bb')
     .setDescription(`Requested by <@${message.member.id}>`)
     .addFields(
       {
         name: '현재 채널',
-        value:  conn.joinedVoiceConnection.channel.name,
+        value:  conn.joinedVoiceChannel.name,
         inline: true,
       },
       {
@@ -1123,7 +1165,7 @@ export class DJYurika {
       },
     );  
   
-    let msg = await message.channel.send(embedMessage);
+    let msg = await message.channel.send({ embeds: [embedMessage] });
     
     msg.react(this.acceptEmoji).catch((err) => {
       console.error(`(${err.name}: ${err.message}) - Request message deleted already`);
@@ -1140,15 +1182,15 @@ export class DJYurika {
     conn.moveRequestList.set(msg.id, req);
   }
   
-  private clearQueue(message: Message, conn: BotConnection) {
+  private clearQueue(message: Message | PartialMessage, conn: BotConnection) {
     if (!conn.queue || conn.queue.songs.length < 2) return;
   
     conn.queue.songs.length = 1;
     message.channel.send('❎ `모든 대기열 삭제 완료`');
   }
   
-  private changeVolume(message: Message, conn: BotConnection) {
-    if (!conn.joinedVoiceConnection || !conn.joinedVoiceConnection.dispatcher) return;
+  private changeVolume(message: Message | PartialMessage, conn: BotConnection) {
+    if (!conn.joinedVoiceChannel || !conn.subscription?.player) return;
   
     const args = message.content.split(' ');
     if (args.length < 2) {
@@ -1159,14 +1201,14 @@ export class DJYurika {
   
     const volume = parseInt(args[1])
     if (args[1] === 'default') {
-      conn.joinedVoiceConnection.dispatcher.setVolumeLogarithmic(conn.config.volume/100);
+      conn.currentAudioResource?.volume.setVolumeLogarithmic(conn.config.volume/100);
       return message.channel.send(`✅ \`Set volume to default ${conn.config.volume}\``);
     }
     else if (isNaN(volume) || volume < 0 || volume > 100) {
       return message.channel.send('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
     }
     else {
-      conn.joinedVoiceConnection.dispatcher.setVolumeLogarithmic(volume/100);
+      conn.currentAudioResource?.volume.setVolumeLogarithmic(volume/100);
       if (args[2] === 'default') {  // default update
         conn.config.volume = volume;
         return message.channel.send(`✅ \`Set volume to ${volume} as default\``);
@@ -1177,7 +1219,7 @@ export class DJYurika {
     }
   }
   
-  private async loadConfig(message: Message, conn: BotConnection) {
+  private async loadConfig(message: Message | PartialMessage, conn: BotConnection) {
     try {
       const config = await this.db.loadConfig(message.guild.id);
       if (config) {
@@ -1189,10 +1231,10 @@ export class DJYurika {
         this.db.saveConfig(this.defaultConfig);
         console.info(`Load and save default config of ${message.guild.name}`);
       }
-      if (message && conn.joinedVoiceConnection) {
+      if (message) {
         message.channel.send(`✅ \`Default config load success\``);
         // apply to current song playing
-        conn.joinedVoiceConnection.dispatcher.setVolumeLogarithmic(conn.config.volume/100);
+        conn.currentAudioResource?.volume.setVolumeLogarithmic(conn.config.volume/100);
       }
     }
     catch (err) {
@@ -1204,7 +1246,7 @@ export class DJYurika {
     }
   }
   
-  private async saveConfig(message: Message, conn: BotConnection) {
+  private async saveConfig(message: Message | PartialMessage, conn: BotConnection) {
     try {
       this.db.saveConfig(conn.config);
       console.info(`Save config of ${message.guild.name} successfully`);
@@ -1240,11 +1282,11 @@ export class DJYurika {
         .setDescription(pingMessage)
         .setColor('#ACF6CA');
   
-      message.channel.send(embedMessage);
+      message.channel.send({ embeds: [embedMessage] });
     });
   }
   
-  private setLoop(message: Message, conn: BotConnection, type: LoopType) {
+  private setLoop(message: Message | PartialMessage, conn: BotConnection, type: LoopType) {
     const voiceState = message.guild.me.voice;
     const voiceChannel = voiceState?.channel;
     if (!conn.queue || conn.queue.songs.length === 0) {
@@ -1309,13 +1351,16 @@ export class DJYurika {
   }
   
   private onDisconnect(conn: BotConnection) {
-    const serverId = conn.joinedVoiceConnection.channel.guild.id;
-    const serverName = conn.joinedVoiceConnection.channel.guild.name;
-    if (conn.joinedVoiceConnection && conn.joinedVoiceConnection.dispatcher) {
-      conn.joinedVoiceConnection.dispatcher.end();
+    const serverId = conn.joinedVoiceChannel.guild.id;
+    const serverName = conn.joinedVoiceChannel.guild.name;
+    if (conn.joinedVoiceChannel && conn.subscription) {
+      // conn.subscription.player.stop();
+      conn.subscription.unsubscribe();
     }
     conn.queue.songs = [];
-    conn.joinedVoiceConnection = null;
+    conn.joinedVoiceChannel = null;
+    conn.subscription = null;
+    conn.currentAudioResource = null;
     conn.channelJoinRequestMember = null;
     conn.recentNowPlayingMessage = null;
     conn.loopFlag = LoopType.NONE;
@@ -1361,7 +1406,7 @@ export class DJYurika {
   }
   
   private async addToPlaylist(song: Song, conn: BotConnection) {
-    const guild = conn.joinedVoiceConnection.channel.guild;  // voice connection 전제상황
+    const guild = conn.joinedVoiceChannel.guild;  // voice connection 전제상황
     console.log(`[${guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
     conn.queue.songs.push(song);
   
@@ -1377,8 +1422,8 @@ export class DJYurika {
   }
   
   private async addSongListToPlaylist(songs: Song[], conn: BotConnection) {
-    const guild = conn.joinedVoiceConnection.channel.guild;  // voice connection 전제상황
-    console.log(`[${conn.joinedVoiceConnection.channel.guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
+    const guild = conn.joinedVoiceChannel.guild;  // voice connection 전제상황
+    console.log(`[${conn.joinedVoiceChannel.guild.name}] ` + '대기열 전송 중...'); // 음성연결 된 상황이 전제
     let dbAddedSongsStr = '';
     let dbAddedSongsCnt = 0;
     for (const song of songs) {
@@ -1407,44 +1452,64 @@ export class DJYurika {
       console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
     }
   
-    const dispatcher = conn.joinedVoiceConnection;
+    const voiceChannel = getVoiceConnection(guild.id);
+    const subscription = conn.subscription?.player ? conn.subscription : voiceChannel?.subscribe(createAudioPlayer({
+      // behaviors: {
+      //   noSubscriber: NoSubscriberBehavior.Stop
+      // }
+    }));
+    if (!conn.subscription) {
+      conn.subscription = subscription;
+    }
 
     try {
       switch (song.source) {
         case SongSource.YOUTUBE:
-          dispatcher.play(await ytdl(song.url), { type: 'opus' })
-          .on("finish", async () => {
-            console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-            const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-            if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-              console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-              (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
-                `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-              );
-            }
+          conn.currentAudioResource = createAudioResource(await ytdl(song.url, { filter: 'audioonly' }), { inputType: StreamType.Opus, inlineVolume: true });          
+          conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
 
-            // if bot is alone and queue is empty, then stop
-            if (conn.joinedVoiceConnection.channel.members.size === 1 && conn.queue.songs.length === 1) {
-              const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-              this.stop(message, null);
-              return;
-            }
+          // play
+          subscription.player.play(conn.currentAudioResource);
 
-            conn.skipFlag = false;  // reset flag
-            conn.recentNowPlayingMessage = null;
-            switch (conn.loopFlag) {
-              case LoopType.LIST:
-                conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-                console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-              case LoopType.NONE:
-                conn.queue.songs.shift();
-                break;
+          // register eventListener
+          subscription.player.once(AudioPlayerStatus.Idle, async (oldState, newState) => {
+            if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
+              console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+              const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+              if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+                console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+                (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
+                  `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+                );
+              }
+  
+              // if bot is alone and queue is empty, then stop
+              if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
+                const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+                this.stop(message, null, conn);
+                return;
+              }
+  
+              conn.skipFlag = false;  // reset flag
+  
+              conn.recentNowPlayingMessage = null;
+              clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
+              delete conn.intervalHandler;
               
-              case LoopType.SINGLE:
-                console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-                break;
+              switch (conn.loopFlag) {
+                case LoopType.LIST:
+                  conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+                  console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+                case LoopType.NONE:
+                  conn.queue.songs.shift();
+                  break;
+                
+                case LoopType.SINGLE:
+                  console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+                  break;
+              }
+              this.play(guild, conn.queue.songs[0], conn);
             }
-            this.play(guild, conn.queue.songs[0], conn);
           })
           .on("error", error => {
             conn.queue.textChannel.send('```cs\n'+
@@ -1452,39 +1517,56 @@ export class DJYurika {
             `Error: ${error.message}`+
             '```');
             console.error(error);
-          })
-          .setVolumeLogarithmic(conn.config.volume / 100);
+          });
+
           break;
+
         case SongSource.SOUNDCLOUD:
-          dispatcher.play(await scdl.download(song.url))
-          .on("finish", () => {
-            console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-            const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-            if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-              console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-              conn.queue.textChannel.send(
-                `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-              );
-            }
-            conn.skipFlag = false;  // reset flag
-            
-            conn.recentNowPlayingMessage = null;
-            clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
-            delete conn.intervalHandler;
-            
-            switch (conn.loopFlag) {
-              case LoopType.LIST:
-                conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-                console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-              case LoopType.NONE:
-                conn.queue.songs.shift();
-                break;
+          conn.currentAudioResource = createAudioResource(await scdl.download(song.url), { inlineVolume: true });
+          conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
+          
+          // play
+          subscription.player.play(conn.currentAudioResource);
+
+          // register eventListener
+          subscription.player.on(AudioPlayerStatus.Idle, async (oldState, newState) => {
+            if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
+              console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+              const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+              if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+                console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+                conn.queue.textChannel.send(
+                  `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+                );
+              }
+  
+              // if bot is alone and queue is empty, then stop
+              if (conn.joinedVoiceChannel.members.size === 1 && conn.queue.songs.length === 1) {
+                const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+                this.stop(message, null, conn);
+                return;
+              }
+  
+              conn.skipFlag = false;  // reset flag
               
-              case LoopType.SINGLE:
-                console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-                break;
+              conn.recentNowPlayingMessage = null;
+              clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
+              delete conn.intervalHandler;
+              
+              switch (conn.loopFlag) {
+                case LoopType.LIST:
+                  conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+                  console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+                case LoopType.NONE:
+                  conn.queue.songs.shift();
+                  break;
+                
+                case LoopType.SINGLE:
+                  console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+                  break;
+              }
+              this.play(guild, conn.queue.songs[0], conn);
             }
-            this.play(guild, conn.queue.songs[0], conn);
           })
           .on("error", error => {
             conn.queue.textChannel.send('```cs\n'+
@@ -1492,8 +1574,8 @@ export class DJYurika {
             `Error: ${error.message}`+
             '```');
             console.error(error);
-          })
-          .setVolumeLogarithmic(conn.config.volume / 100);
+          });
+
           break;
       }
       this.db.increasePlayCount(song, guild.id);
@@ -1508,7 +1590,7 @@ export class DJYurika {
       console.error(err);
       console.info('Song url was ' + song.url)
       // conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
-      if (dispatcher) {
+      if (voiceChannel) {
         conn.queue.songs.shift();
         this.play(guild, conn.queue.songs[0], conn);
       }
@@ -1532,6 +1614,7 @@ export class DJYurika {
             else {
               randSong = await this.getYoutubeVideoInfo('https://www.youtube.com/watch?v=' + randRes.id);
             }
+            randSong = randSong as videoInfo;
             song = new Song(
               randSong.videoDetails.videoId,
               randSong.videoDetails.title,
@@ -1550,6 +1633,7 @@ export class DJYurika {
             else {
               randSong = await this.getSoundcloudSongInfoByID(parseInt(randRes.id));
             }
+            randSong = randSong as TrackInfo;
             song = new Song(
               randSong.id.toString(),
               randSong.title,
@@ -1578,7 +1662,7 @@ export class DJYurika {
     }
   }
   
-  private async keywordSearch(message: Message, msgId: string, conn: BotConnection) {
+  private async keywordSearch(message: Message | PartialMessage, msgId: string, conn: BotConnection) {
     const keyword = message.content.split(' ').slice(1).join(' ');
     
     let ytRes: YoutubeSearch;
@@ -1619,14 +1703,18 @@ export class DJYurika {
     });
     
     const embedMessage = new MessageEmbed()
-      .setAuthor('DJ Yurika', message.guild.me.user.avatarURL(), message.guild.me.user.avatarURL())
+      .setAuthor({
+        name: 'DJ Yurika',
+        iconURL: message.guild.me.user.avatarURL(),
+        url: message.guild.me.user.avatarURL()
+      })
       .setTitle('Search result [YT: YouTube, SC: SoundCloud]')
       .setDescription(`Requested by <@${message.member.id}>`)
       .setColor('#FFC0CB')
       .addFields(fields);
     
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
-    let msg = await message.channel.send(embedMessage);
+    let msg = await message.channel.send({ embeds: [embedMessage] });
     searchResult.message = msg;
   
     conn.searchResultMsgs.set(msg.id, searchResult);
@@ -1665,7 +1753,7 @@ export class DJYurika {
     });
   }
   
-  private async playSoundcloudRequest(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {
+  private async playSoundcloudRequest(conn: BotConnection, message: Message | PartialMessage, user: User, url: string, msgId: string) {
     let reqMember = message.guild.members.cache.get(user.id);
     let voiceChannel = message.member.voice.channel;
     // cannot get channel when message passed via reaction, so use below
@@ -1703,7 +1791,7 @@ export class DJYurika {
     this.playProcess(conn, message, user, song, msgId);
   }
   
-  private async playYoutubeRequest(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {
+  private async playYoutubeRequest(conn: BotConnection, message: Message | PartialMessage, user: User, url: string, msgId: string) {
     // get song info
     let songInfo: ytdlc.videoInfo;
     try {
@@ -1735,15 +1823,12 @@ export class DJYurika {
     this.playProcess(conn, message, user, song, msgId);
   }
   
-  private async playProcess(conn: BotConnection, message: Message, user: User, song: Song, msgId: string) {
-    let reqMember = message.guild.members.cache.get(user.id);
-    let voiceChannel = message.member.voice.channel;
-    // cannot get channel when message passed via reaction, so use below
-    if (!voiceChannel) {
-      voiceChannel = reqMember.voice.channel;
-    }
+  private async playProcess(conn: BotConnection, message: Message | PartialMessage, user: User, song: Song, msgId: string) {
+    const reqMember = message.guild.members.cache.get(user.id);
+    // cannot get channel when message passed via reaction, so use reqMember
+    let voiceChannel = message.member.voice.channel ?? reqMember.voice.channel;
     
-    if (!conn.queue || conn.joinedVoiceConnection === null) {
+    if (!conn.queue || conn.joinedVoiceChannel === null) {
       conn.queue = new SongQueue(message.channel, []);
   
       try {
@@ -1751,12 +1836,20 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        var connection = await voiceChannel.join();
-        connection.on('disconnect', () => {
+        const connection = joinVoiceChannel({
+          channelId: voiceChannel.id,
+          guildId: message.guild.id,
+          // .d.ts type issue
+          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+        });
+        
+        connection.on(VoiceConnectionStatus.Ready, () => {
+          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
+        })
+        .on(VoiceConnectionStatus.Destroyed, () => {
           this.onDisconnect(conn);
         });
-        console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        conn.joinedVoiceConnection = connection;
+        conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
         if (!this.connections.has(message.guild.id)) {
@@ -1790,22 +1883,26 @@ export class DJYurika {
   
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
       
-      if (conn.joinedVoiceConnection.channel.members.size === 1) { // no one
+      if (conn.joinedVoiceChannel.members.size === 1) { // no one
         // if moderator, developer without voice channel, then ignore
         if (reqMember.voice.channel) {
           this.moveVoiceChannel(conn, null, reqMember, message.channel, reqMember.voice.channel);
         }
       }
-  
+
       const embedMessage = new MessageEmbed()
-      .setAuthor('재생목록 추가', user.avatarURL(), song.url)
+      .setAuthor({
+        name: '재생목록 추가',
+        iconURL: user.avatarURL(),
+        url: song.url
+      })
       .setColor('#0000ff')
       .setDescription(`[${song.title}](${song.url})`)
       .setThumbnail(song.thumbnail)
-      .addFields(
+      .addFields([
         {
           name: '음성채널',
-          value:  conn.joinedVoiceConnection.channel.name,
+          value:  conn.joinedVoiceChannel.name,
           inline: false,
         },
         {
@@ -1820,31 +1917,37 @@ export class DJYurika {
         },
         {
           name:   '대기열',
-          value:  conn.queue.songs.length - 1,
+          value:  (conn.queue.songs.length - 1).toString(),
           inline: true,
         },
-      );
+      ] as EmbedFieldData[]);
   
       switch (song.source) {
         case SongSource.YOUTUBE:
-          embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
+          embedMessage.setFooter({
+            text: 'Youtube',
+            iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png',
+          });
           break;
         case SongSource.SOUNDCLOUD:
-          embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
+          embedMessage.setFooter({
+            text: 'SoundCloud',
+            iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png',
+          });
           break;
       }
     
-      message.channel.send(embedMessage);
+      message.channel.send({ embeds: [embedMessage] });
       
       // if moderator, developer without voice channel, then ignore
-      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceConnection.channel.id)) {
+      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceChannel.id)) {
         message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
       }
       return;
     }
   }
   
-  private async parseSoundcloudPlaylist(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {
+  private async parseSoundcloudPlaylist(conn: BotConnection, message: Message | PartialMessage, user: User, url: string, msgId: string) {
     let playlist: SetInfo;
     try {
       playlist = await this.getSoundcloudPlaylistInfo(url);
@@ -1865,12 +1968,19 @@ export class DJYurika {
     }
   
     const embedMessage = new MessageEmbed()
-    .setAuthor('사운드클라우드 플레이리스트 감지됨', playlist.user.avatar_url, playlist.permalink_url)
-    .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
+    .setAuthor({
+      name: '사운드클라우드 플레이리스트 감지됨',
+      iconURL: playlist.user.avatar_url,
+      url: playlist.permalink_url
+    })
+    .setFooter({
+      text: 'SoundCloud',
+      iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+    })
     .setColor('#FF5500')
     .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
     .setDescription(`Requested by <@${message.member.id}>`)
-    .addFields(
+    .addFields([
       {
         name: '플레이리스트',
         value: (playlist as any).title, // type에 정의 안되어있어서 any강제캐스팅
@@ -1883,13 +1993,13 @@ export class DJYurika {
       },
       {
         name: '곡수',
-        value: playlist.track_count,
+        value: playlist.track_count.toString(),
         inline: true
       },
-    );
+    ] as EmbedFieldData[]);
     
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
-    const msg = await message.channel.send(embedMessage);
+    const msg = await message.channel.send({ embeds: [embedMessage] });
     const confirmList = new AddPlaylistConfirmList();
     confirmList.message = msg;
     confirmList.reqUser = message.member;
@@ -1905,7 +2015,7 @@ export class DJYurika {
     });
   }
   
-  private async parseYoutubePlaylist(conn: BotConnection, message: Message, user: User, url: string, msgId: string) {
+  private async parseYoutubePlaylist(conn: BotConnection, message: Message | PartialMessage, user: User, url: string, msgId: string) {
     // get playlist info
     let playlist: ytpl.Result;
     try {
@@ -1927,12 +2037,19 @@ export class DJYurika {
     }
   
     const embedMessage = new MessageEmbed()
-    .setAuthor('유튜브 플레이리스트 감지됨', playlist.author?.bestAvatar.url, playlist.url)
-    .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
+    .setAuthor({
+      name: '유튜브 플레이리스트 감지됨',
+      iconURL: playlist.author?.bestAvatar.url,
+      url: playlist.url
+    })
+    .setFooter({
+      text: 'Youtube', 
+      iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+    })
     .setColor('#FFC0CB')
     .setThumbnail(playlist.bestThumbnail.url)
     .setDescription(`Requested by <@${message.member.id}>`)
-    .addFields(
+    .addFields([
       {
         name: '플레이리스트',
         value: playlist.title,
@@ -1945,13 +2062,13 @@ export class DJYurika {
       },
       {
         name: '곡수',
-        value: playlist.estimatedItemCount,
+        value: playlist.estimatedItemCount.toString(),
         inline: true
       },
-    );
+    ] as EmbedFieldData[]);
     
     message.channel.messages.fetch(msgId).then(msg => msg.delete());
-    const msg = await message.channel.send(embedMessage);
+    const msg = await message.channel.send({ embeds: [embedMessage] });
     const confirmList = new AddPlaylistConfirmList();
     confirmList.message = msg;
     confirmList.reqUser = message.member;
@@ -1967,7 +2084,7 @@ export class DJYurika {
     });
   }
   
-  private async playYoutubeRequestList(conn: BotConnection, message: Message, user: User, playlist: ytpl.Result, msgId: string) {
+  private async playYoutubeRequestList(conn: BotConnection, message: Message | PartialMessage, user: User, playlist: ytpl.Result, msgId: string) {
     let reqMember = message.guild.members.cache.get(user.id);
     let voiceChannel = message.member.voice.channel;
     // cannot get channel when message passed via reaction, so use below
@@ -1994,7 +2111,7 @@ export class DJYurika {
   
     console.log(`[${message.guild.name}] 플레이리스트 추가: ${playlist.title}(${playlist.author ? playlist.author.name : playlist.items[0].author.name}) - ${playlist.estimatedItemCount}곡`);
   
-    if (!conn.queue || conn.joinedVoiceConnection === null) {
+    if (!conn.queue || conn.joinedVoiceChannel === null) {
       conn.queue = new SongQueue(message.channel, []);
   
       try {
@@ -2002,12 +2119,20 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        var connection = await voiceChannel.join();
-        connection.on('disconnect', () => {
+        const connection = joinVoiceChannel({
+          channelId: voiceChannel.id,
+          guildId: message.guild.id,
+          // .d.ts type issue
+          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+        });
+        
+        connection.on(VoiceConnectionStatus.Ready, () => {
+          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
+        })
+        .on(VoiceConnectionStatus.Destroyed, () => {
           this.onDisconnect(conn);
         });
-        console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        conn.joinedVoiceConnection = connection;
+        conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
         if (!this.connections.has(message.guild.id)) {
@@ -2018,11 +2143,18 @@ export class DJYurika {
   
         // notice multiple song add
         const embedMessage = new MessageEmbed()
-        .setAuthor('재생목록 추가', user.avatarURL(), playlist.url)
-        .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
+        .setAuthor({
+          name: '재생목록 추가',
+          iconURL: user.avatarURL(),
+          url: playlist.url
+        })
+        .setFooter({
+          text: 'Youtube', 
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+        })
         .setColor('#0000ff')
         .setThumbnail(playlist.bestThumbnail.url)
-        .addFields(
+        .addFields([
           {
             name: '플레이리스트',
             value: playlist.title,
@@ -2035,7 +2167,7 @@ export class DJYurika {
           },
           {
             name: '곡수',
-            value: playlist.estimatedItemCount,
+            value: playlist.estimatedItemCount.toString(),
             inline: true
           },
           {
@@ -2043,8 +2175,8 @@ export class DJYurika {
             value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
             inline: true,
           },
-        );
-        message.channel.send(embedMessage);
+        ] as EmbedFieldData[]);
+        message.channel.send({ embeds: [embedMessage] });
   
         this.play(message.guild, conn.queue.songs[0], conn);
       }
@@ -2070,7 +2202,7 @@ export class DJYurika {
   
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
       
-      if (conn.joinedVoiceConnection.channel.members.size === 1) { // no one
+      if (conn.joinedVoiceChannel.members.size === 1) { // no one
         // if moderator, developer without voice channel, then ignore
         if (reqMember.voice.channel) {
           this.moveVoiceChannel(conn, null, reqMember, message.channel, reqMember.voice.channel);
@@ -2078,11 +2210,18 @@ export class DJYurika {
       }
   
       const embedMessage = new MessageEmbed()
-      .setAuthor('재생목록 추가', user.avatarURL(), playlist.url)
-      .setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png')
+      .setAuthor({
+        name: '재생목록 추가',
+        iconURL: user.avatarURL(),
+        url: playlist.url
+      })
+      .setFooter({
+        text: 'Youtube', 
+        iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+      })
       .setColor('#0000ff')
       .setThumbnail(playlist.bestThumbnail.url)
-      .addFields(
+      .addFields([
         {
           name: '플레이리스트',
           value: playlist.title,
@@ -2095,7 +2234,7 @@ export class DJYurika {
         },
         {
           name: '곡수',
-          value: playlist.estimatedItemCount,
+          value: playlist.estimatedItemCount.toString(),
           inline: true
         },
         {
@@ -2108,19 +2247,19 @@ export class DJYurika {
           value:  conn.queue.songs.length - playlist.estimatedItemCount,
           inline: true,
         },
-      );
+      ] as EmbedFieldData[]);
     
-      message.channel.send(embedMessage);
+      message.channel.send({ embeds: [embedMessage] });
       
       // if moderator, developer without voice channel, then ignore
-      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceConnection.channel.id)) {
+      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceChannel.id)) {
         message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
       }
       return;
     }
   }
   
-  private async playSoundcloudRequestList(conn: BotConnection, message: Message, user: User, playlist: SetInfo, msgId: string) {
+  private async playSoundcloudRequestList(conn: BotConnection, message: Message | PartialMessage, user: User, playlist: SetInfo, msgId: string) {
     let reqMember = message.guild.members.cache.get(user.id);
     let voiceChannel = message.member.voice.channel;
     // cannot get channel when message passed via reaction, so use below
@@ -2147,7 +2286,7 @@ export class DJYurika {
   
     console.log(`[${message.guild.name}] 플레이리스트 추가: ${(playlist as any).title}(${playlist.user.username}) - ${playlist.track_count}곡`);
   
-    if (!conn.queue || conn.joinedVoiceConnection === null) {
+    if (!conn.queue || conn.joinedVoiceChannel === null) {
       conn.queue = new SongQueue(message.channel, []);
   
       try {
@@ -2155,12 +2294,23 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        var connection = await voiceChannel.join();
-        connection.on('disconnect', () => {
+        const connection = joinVoiceChannel({
+          channelId: voiceChannel.id,
+          guildId: message.guild.id,
+          // .d.ts type issue
+          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+        });
+        
+        connection.on(VoiceConnectionStatus.Ready, () => {
+          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
+        })
+        .on(VoiceConnectionStatus.Disconnected, () => {
+          this.onDisconnect(conn);
+        })
+        .on(VoiceConnectionStatus.Destroyed, () => {
           this.onDisconnect(conn);
         });
-        console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        conn.joinedVoiceConnection = connection;
+        conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
         if (!this.connections.has(message.guild.id)) {
@@ -2171,11 +2321,18 @@ export class DJYurika {
   
         // notice multiple song add
         const embedMessage = new MessageEmbed()
-        .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
-        .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
+        .setAuthor({
+          name: '재생목록 추가',
+          iconURL: user.avatarURL(),
+          url: playlist.permalink_url
+        })
+        .setFooter({
+          text: 'SoundCloud',
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+        })
         .setColor('#0000ff')
         .setThumbnail(playlist.artwork_url ? playlist.artwork_url : playlist.tracks[0].artwork_url)
-        .addFields(
+        .addFields([
           {
             name: '플레이리스트',
             value: (playlist as any).title,
@@ -2188,7 +2345,7 @@ export class DJYurika {
           },
           {
             name: '곡수',
-            value: playlist.track_count,
+            value: playlist.track_count.toString(),
             inline: true
           },
           {
@@ -2196,8 +2353,8 @@ export class DJYurika {
             value:  `${fillZeroPad(Math.trunc(totalDuration / 3600), 2)}:${fillZeroPad(Math.trunc((totalDuration % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(totalDuration % 60), 2)}`,
             inline: true,
           },
-        );
-        message.channel.send(embedMessage);
+        ] as EmbedFieldData[]);
+        message.channel.send({ embeds: [embedMessage] });
   
         this.play(message.guild, conn.queue.songs[0], conn);
       }
@@ -2223,7 +2380,7 @@ export class DJYurika {
   
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
       
-      if (conn.joinedVoiceConnection.channel.members.size === 1) { // no one
+      if (conn.joinedVoiceChannel.members.size === 1) { // no one
         // if moderator, developer without voice channel, then ignore
         if (reqMember.voice.channel) {
           this.moveVoiceChannel(conn, null, reqMember, message.channel, reqMember.voice.channel);
@@ -2231,11 +2388,18 @@ export class DJYurika {
       }
   
       const embedMessage = new MessageEmbed()
-      .setAuthor('재생목록 추가', user.avatarURL(), playlist.permalink_url)
-      .setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png')
+      .setAuthor({
+        name: '재생목록 추가',
+        iconURL: user.avatarURL(),
+        url: playlist.permalink_url
+      })
+      .setFooter({
+        text: 'SoundCloud',
+        iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+      })
       .setColor('#0000ff')
       .setThumbnail(playlist.artwork_url)
-      .addFields(
+      .addFields([
         {
           name: '플레이리스트',
           value: (playlist as any).title,
@@ -2248,7 +2412,7 @@ export class DJYurika {
         },
         {
           name: '곡수',
-          value: playlist.track_count,
+          value: playlist.track_count.toString(),
           inline: true
         },
         {
@@ -2261,28 +2425,40 @@ export class DJYurika {
           value:  conn.queue.songs.length - playlist.track_count,
           inline: true,
         },
-      );
+      ] as EmbedFieldData[]);
     
-      message.channel.send(embedMessage);
+      message.channel.send({ embeds: [embedMessage] });
       
       // if moderator, developer without voice channel, then ignore
-      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceConnection.channel.id)) {
+      if (reqMember.voice.channel && (reqMember.voice.channel?.id !== conn.joinedVoiceChannel.id)) {
         message.channel.send(`<@${user.id}> 음성채널 위치가 다릅니다. 옮기려면 \`~move\` 로 이동 요청하세요.`);
       }
       return;
     }  
   }
   
-  private async moveVoiceChannel(conn: BotConnection, message: Message, triggeredMember: GuildMember, commandChannel: TextChannel | DMChannel | NewsChannel, voiceChannel: VoiceChannel) {
+  private async moveVoiceChannel(conn: BotConnection, message: Message | PartialMessage, triggeredMember: GuildMember, commandChannel: DMChannel | PartialDMChannel | NewsChannel | TextChannel | ThreadChannel, voiceChannel: VoiceBasedChannel) {
     try {
       console.log(`[${message.guild.name}] ` + '음성 채널 이동 중...');
       commandChannel.send(`🔗 \`연결: ${voiceChannel.name}\``);
-      var connection = await voiceChannel.join();
-      connection.on('disconnect', () => {
+      
+      const connection = joinVoiceChannel({
+        channelId: voiceChannel.id,
+        guildId: message.guild.id,
+        // .d.ts type issue
+        adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+      });
+      
+      connection.on(VoiceConnectionStatus.Ready, () => {
+        console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
+      })
+      .on(VoiceConnectionStatus.Disconnected, () => {
+        this.onDisconnect(conn);
+      })
+      .on(VoiceConnectionStatus.Destroyed, () => {
         this.onDisconnect(conn);
       });
-      console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${triggeredMember.displayName})`);
-      conn.joinedVoiceConnection = connection;
+      conn.joinedVoiceChannel = voiceChannel;
       conn.channelJoinRequestMember = triggeredMember;
       // delete message
       if (message) {
@@ -2316,29 +2492,35 @@ export class DJYurika {
           if (!song) throw Error('Song object not defined');  // prevent error
           
           // calculate current playtime. 1/3 scale
-          var playtime: number | string = conn.joinedVoiceConnection.dispatcher.streamTime / 1000;
-          const currentPoint = Math.round(playtime / song.duration * 100 / 4);
-          var playbar: string[] | string = Array(26).fill('▬');
-          playbar[currentPoint] = '🔘';
-          playbar = playbar.join('');
-          var remaintime: number | string = song.duration - playtime;
-          if (song.duration >= 3600) {
-            playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-            remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-          } else {
-            playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-            remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-          }
+          // conn.subscription.connection.
+          // var playtime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
+          // const currentPoint = Math.round(playtime / song.duration * 100 / 4);
+          // var playbar: string[] | string = Array(26).fill('▬');
+          // playbar[currentPoint] = '🔘';
+          // playbar = playbar.join('');
+          // var remaintime: number | string = song.duration - playtime;
+          // if (song.duration >= 3600) {
+          //   playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+          //   remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+          // } else {
+          //   playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
+          //   remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
+          // }
   
           const embedMessage = new MessageEmbed()
-          .setAuthor(`${conn.joinedVoiceConnection.channel.name} 에서 재생 중`, this.client.user.avatarURL(), song.url)
+          .setAuthor({
+            name: `${conn.joinedVoiceChannel.name} 에서 재생 중`,
+            iconURL: this.client.user.avatarURL(),
+            url: song.url
+          })
           .setColor('#0000ff')
           .setDescription(`[${song.title}](${song.url})`)
           .setThumbnail(song.thumbnail)
           .addFields(
             {
               name: '\u200B', // invisible zero width space
-              value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+              value:  `**선곡: <@${song.requestUserId}>**`, // playbar
+              // value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
               inline: false,
             },
             {
@@ -2355,20 +2537,28 @@ export class DJYurika {
   
           switch (song.source) {
             case SongSource.YOUTUBE:
-              embedMessage.setFooter('Youtube', 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png');
+              embedMessage.setFooter({
+                text: 'Youtube', 
+                iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+              });
               break;
             case SongSource.SOUNDCLOUD:
-              embedMessage.setFooter('SoundCloud', 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png');
+              embedMessage.setFooter({
+                text: 'SoundCloud',
+                iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+              });
               break;
           }
   
-          if (conn.recentNowPlayingMessage.deleted) throw Error('Now playing message is deleted');
-          else conn.recentNowPlayingMessage.edit(embedMessage);
+          if (conn.recentNowPlayingMessage.editable) {
+            conn.recentNowPlayingMessage.edit({ embeds: [embedMessage] });
+          }
+          else throw Error('Now playing message is deleted');
         }
       }
       catch (err) {
         // cannot catch DiscordAPIError (api issue)
-        console.info(`[${conn.joinedVoiceConnection.channel.guild.name}] ${err.message}`);
+        console.info(`[${conn.joinedVoiceChannel.guild.name}] ${err.message}`);
         clearInterval(conn.intervalHandler);
         delete conn.intervalHandler;
       }
