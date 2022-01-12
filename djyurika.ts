@@ -469,7 +469,7 @@ export class DJYurika {
     
         //  except developer or moderator
         if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
-          const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
+          const voiceChannel = conn.joinedVoiceChannel ?? reaction.message.guild.members.cache.get(user.id).voice.channel;
           // requested user only
           if (user.id !== selectedMsg.reqUser.id) return;
           // check requested user is in voice channel
