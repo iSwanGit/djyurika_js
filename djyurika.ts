@@ -1,6 +1,7 @@
 import { Client, DMChannel, EmbedFieldData, Guild, GuildMember, Intents, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, TextChannel, ThreadChannel, User, VoiceBasedChannel, VoiceChannel } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus, PlayerSubscription, StreamType, NoSubscriberBehavior } from '@discordjs/voice';
 
+import playDl from 'play-dl';
 import ytdl from 'ytdl-core-discord';
 import ytdlc, { videoInfo } from 'ytdl-core';  // for using type declaration
 import ytpl from 'ytpl';
@@ -88,6 +89,12 @@ export class DJYurika {
     this.connections = new Map<string, BotConnection>();
     this.interval = environment.refreshInterval;
     this.maxQueueTextRowSize = environment.maxQueueTextRows;
+
+    // playDl.setToken({
+    //   soundcloud: {
+    //     client_id: keys.soundcloudClientId,
+    //   },
+    // });
   }
 
   // ------- Client Initialization -------
@@ -1463,121 +1470,73 @@ export class DJYurika {
     }
 
     try {
+      // use new module play-dl
+      // if (playDl.is_expired()) await playDl.refreshToken();  // only works with spotify??
+
       switch (song.source) {
         case SongSource.YOUTUBE:
-          conn.currentAudioResource = createAudioResource(await ytdl(song.url, { filter: 'audioonly' }), { inputType: StreamType.Opus, inlineVolume: true });          
-          conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
-
-          // play
-          subscription.player.play(conn.currentAudioResource);
-
-          // register eventListener
-          subscription.player.once(AudioPlayerStatus.Idle, async (oldState, newState) => {
-            if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
-              console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-              const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-              if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-                console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-                (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
-                  `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-                );
-              }
-  
-              // if bot is alone and queue is empty, then stop
-              if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
-                const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-                this.stop(message, null, conn);
-                return;
-              }
-  
-              conn.skipFlag = false;  // reset flag
-  
-              conn.recentNowPlayingMessage = null;
-              clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
-              delete conn.intervalHandler;
-              
-              switch (conn.loopFlag) {
-                case LoopType.LIST:
-                  conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-                  console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-                case LoopType.NONE:
-                  conn.queue.songs.shift();
-                  break;
-                
-                case LoopType.SINGLE:
-                  console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-                  break;
-              }
-              this.play(guild, conn.queue.songs[0], conn);
-            }
-          })
-          .on("error", error => {
-            conn.queue.textChannel.send('```cs\n'+
-            '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-            `Error: ${error.message}`+
-            '```');
-            console.error(error);
-          });
-
+          const stream = await playDl.stream(song.url);  // my soundcloud client_id expired...
+          conn.currentAudioResource = createAudioResource(stream.stream, { inputType: stream.type, inlineVolume: true });
           break;
-
+        
         case SongSource.SOUNDCLOUD:
           conn.currentAudioResource = createAudioResource(await scdl.download(song.url), { inlineVolume: true });
-          conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
-          
-          // play
-          subscription.player.play(conn.currentAudioResource);
-
-          // register eventListener
-          subscription.player.on(AudioPlayerStatus.Idle, async (oldState, newState) => {
-            if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
-              console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-              const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-              if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-                console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-                conn.queue.textChannel.send(
-                  `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-                );
-              }
-  
-              // if bot is alone and queue is empty, then stop
-              if (conn.joinedVoiceChannel.members.size === 1 && conn.queue.songs.length === 1) {
-                const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-                this.stop(message, null, conn);
-                return;
-              }
-  
-              conn.skipFlag = false;  // reset flag
-              
-              conn.recentNowPlayingMessage = null;
-              clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
-              delete conn.intervalHandler;
-              
-              switch (conn.loopFlag) {
-                case LoopType.LIST:
-                  conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-                  console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-                case LoopType.NONE:
-                  conn.queue.songs.shift();
-                  break;
-                
-                case LoopType.SINGLE:
-                  console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-                  break;
-              }
-              this.play(guild, conn.queue.songs[0], conn);
-            }
-          })
-          .on("error", error => {
-            conn.queue.textChannel.send('```cs\n'+
-            '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-            `Error: ${error.message}`+
-            '```');
-            console.error(error);
-          });
-
           break;
       }
+
+      conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
+
+      // play
+      subscription.player.play(conn.currentAudioResource);
+
+      // register eventListener
+      subscription.player.once(AudioPlayerStatus.Idle, async (oldState, newState) => {
+        if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
+          console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+          const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+          if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+            console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+            (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
+              `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+            );
+          }
+
+          // if bot is alone and queue is empty, then stop
+          if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
+            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+            this.stop(message, null, conn);
+            return;
+          }
+
+          conn.skipFlag = false;  // reset flag
+
+          conn.recentNowPlayingMessage = null;
+          clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
+          delete conn.intervalHandler;
+          
+          switch (conn.loopFlag) {
+            case LoopType.LIST:
+              conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
+              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+            case LoopType.NONE:
+              conn.queue.songs.shift();
+              break;
+            
+            case LoopType.SINGLE:
+              console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+              break;
+          }
+          this.play(guild, conn.queue.songs[0], conn);
+        }
+      })
+      .on("error", error => {
+        conn.queue.textChannel.send('```cs\n'+
+        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+        `Error: ${error.message}`+
+        '```');
+        console.error(error);
+      });
+
       this.db.increasePlayCount(song, guild.id);
       this.db.fillEmptySongInfo(song);
   
@@ -1595,7 +1554,7 @@ export class DJYurika {
         this.play(guild, conn.queue.songs[0], conn);
       }
       else {
-        console.error('Voice connection dispatcher is gone');
+        console.error('Voice connection is gone');
       }
     }
   }
@@ -1664,6 +1623,19 @@ export class DJYurika {
   
   private async keywordSearch(message: Message | PartialMessage, msgId: string, conn: BotConnection) {
     const keyword = message.content.split(' ').slice(1).join(' ');
+
+    // play-dl only supports searching via youtube....
+    // 유튜브 검색만 됨.. 검색기능은 보류
+    // Spotify 재생은 곡정보만 가져오나봄
+
+    // const res = await playDl.search(keyword, {
+    //   source: {
+    //     youtube: 'video',
+    //     // soundcloud: 'tracks',
+    //     // spotify: 'track',
+    //   },
+    //   limit: 10,
+    // });
     
     let ytRes: YoutubeSearch;
     let scRes: SearchResponseAll;
