@@ -340,13 +340,6 @@ export class DJYurika {
     
       selectedMsg = conn.searchResultMsgs.get(reaction.message.id);
       if (selectedMsg) {
-        // check requested user is in voice channel
-        const voiceChannel = reaction.message.guild.members.cache.get(user.id).voice.channel;
-        if (!voiceChannel) {
-          reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
-          return;
-        }
-    
         //  except developer or moderator
         if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
           // requested user only
@@ -359,6 +352,13 @@ export class DJYurika {
           reaction.message.suppressEmbeds();
           reaction.message.reactions.removeAll();
           conn.searchResultMsgs.delete(reaction.message.id);
+          return;
+        }
+
+        // check bot or requested user is in voice channel
+        const voiceChannel = conn.joinedVoiceChannel ?? reaction.message.guild.members.cache.get(user.id).voice.channel;
+        if (!voiceChannel) {
+          reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
           return;
         }
       
