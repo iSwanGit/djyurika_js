@@ -28,6 +28,8 @@ export class DJYurika {
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
+  '`~shuffle`: 대기열 뒤섞기\n' + 
+  '`~pause`: 곡 일시정지 / 재개\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
@@ -38,6 +40,8 @@ export class DJYurika {
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
+  '`~shuffle`: 대기열 뒤섞기\n' + 
+  '`~pause`: 곡 일시정지 / 재개\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~m`: 재생목록 순서 변경\n' + 
@@ -53,6 +57,8 @@ export class DJYurika {
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
+  '`~shuffle`: 대기열 뒤섞기\n' + 
+  '`~pause`: 곡 일시정지 / 재개\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~m`: 재생목록 순서 변경\n' + 
@@ -256,6 +262,15 @@ export class DJYurika {
               message.channel.send(`🎵 id: \`${conn.queue.songs[0]?.id}\``)
             }
           }
+          break;
+
+        case 'shuffle':
+          // role check 보류
+          this.shuffleQueue(message, conn);
+          break;
+        
+        case 'pause':
+          this.pauseAndResume(message, conn);
           break;
     
         case 'd':
@@ -918,6 +933,45 @@ export class DJYurika {
     }
    
   }
+
+  /**
+   * 대기열 노래 다시 섞기
+   * @param message 
+   * @param conn 
+   */
+  private shuffleQueue(message: Message | PartialMessage, conn: BotConnection) {
+    if (!conn.queue || conn.queue.songs.length < 2) return;
+  
+    const currentSong = conn.queue.songs[0];
+    const newQueue = conn.queue.songs.slice(1).sort(() => Math.random() - 0.5);
+    conn.queue.songs = [currentSong, ...newQueue];
+
+    message.channel.send('🔀 `대기열 섞기 완료`');
+  }
+
+  /**
+   * 일시정지 및 재개
+   * @param message 
+   * @param conn 
+   */
+  private pauseAndResume(message: Message | PartialMessage, conn: BotConnection) {
+    const player = conn.subscription.player;
+    if (!player) {
+      return message.channel.send('⚠ `재생 중이 아님`');
+    }
+
+    switch (player.state.status) {
+      case AudioPlayerStatus.Playing:
+        player.pause();
+        message.channel.send(`⏸ \`일시 정지\``);
+        break;
+      case AudioPlayerStatus.Paused:
+        player.unpause();
+        message.channel.send(`▶ \`재생\``);
+        break;
+    }
+  }
+
   
   /**
    * 대기열에서 노래 삭제하는 명령 처리 entrypoint
