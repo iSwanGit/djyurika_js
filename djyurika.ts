@@ -1911,22 +1911,7 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        const connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: message.guild.id,
-          // .d.ts type issue
-          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-        });
-        
-        connection.once(VoiceConnectionStatus.Ready, () => {
-          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        })
-        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
-          // console.log(oldState.status, newState.status);
-        })
-        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
-          this.onDisconnect(conn);
-        });
+        this.connectVoice(message.guild, voiceChannel, conn, reqMember);
         conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
@@ -2163,7 +2148,7 @@ export class DJYurika {
   }
   
   private async playYoutubeRequestList(conn: BotConnection, message: Message | PartialMessage, user: User, playlist: ytpl.Result, msgId: string) {
-    let reqMember = message.guild.members.cache.get(user.id);
+    const reqMember = message.guild.members.cache.get(user.id);
     let voiceChannel = message.member.voice.channel;
     // cannot get channel when message passed via reaction, so use below
     if (!voiceChannel) {
@@ -2197,22 +2182,8 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        const connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: message.guild.id,
-          // .d.ts type issue
-          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-        });
-        
-        connection.once(VoiceConnectionStatus.Ready, () => {
-          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        })
-        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
-          // console.log(oldState.status, newState.status);
-        })
-        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
-          this.onDisconnect(conn);
-        });
+        this.connectVoice(message.guild, voiceChannel, conn, reqMember);
+
         conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
@@ -2341,7 +2312,7 @@ export class DJYurika {
   }
   
   private async playSoundcloudRequestList(conn: BotConnection, message: Message | PartialMessage, user: User, playlist: SetInfo, msgId: string) {
-    let reqMember = message.guild.members.cache.get(user.id);
+    const reqMember = message.guild.members.cache.get(user.id);
     let voiceChannel = message.member.voice.channel;
     // cannot get channel when message passed via reaction, so use below
     if (!voiceChannel) {
@@ -2375,22 +2346,8 @@ export class DJYurika {
         console.log(`[${message.guild.name}] ` + '음성 채널 연결 중...');
         message.channel.send(`🔗 \`연결: ${voiceChannel.name}\``);
         
-        const connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: message.guild.id,
-          // .d.ts type issue
-          adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
-        });
-        
-        connection.once(VoiceConnectionStatus.Ready, () => {
-          console.info(`[${message.guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
-        })
-        .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
-          // console.log(oldState.status, newState.status);
-        })
-        .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
-          this.onDisconnect(conn);
-        });
+        this.connectVoice(message.guild, voiceChannel, conn, reqMember);
+
         conn.joinedVoiceChannel = voiceChannel;
         conn.channelJoinRequestMember = reqMember;
   
@@ -2651,6 +2608,34 @@ export class DJYurika {
     }
   }
 
+  /**
+   * 음성 채널 연결 (커넥션 수립)
+   * @param guild 
+   * @param voiceChannel 
+   * @param conn 
+   * @returns voice connection object
+   */
+  private connectVoice(guild: Guild, voiceChannel: VoiceBasedChannel, conn: BotConnection, reqMember: GuildMember) {
+    const connection = joinVoiceChannel({
+      channelId: voiceChannel.id,
+      guildId: guild.id,
+      // .d.ts type issue
+      adapterCreator: voiceChannel.guild.voiceAdapterCreator as unknown as DiscordGatewayAdapterCreator,
+    });
+    
+    connection.once(VoiceConnectionStatus.Ready, () => {
+      console.info(`[${guild.name}] ` + `연결 됨: ${voiceChannel.name} (by ${reqMember.displayName})`);
+    })
+    .on(VoiceConnectionStatus.Disconnected, (oldState, newState) => {
+      // console.log(oldState.status, newState.status);
+    })
+    .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
+      this.pushPlayHistory(conn.history, conn.queue.songs[0]);
+      this.onDisconnect(conn);
+    });
+
+    return connection;
+  }
 
 }
 
