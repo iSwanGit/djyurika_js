@@ -1,9 +1,11 @@
 import { GuildMember, Message, VoiceBasedChannel } from 'discord.js';
 import { AudioResource, PlayerSubscription, VoiceConnection } from '@discordjs/voice';
-import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType } from '.';
+import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType, PlayHistory } from '.';
 
 export class BotConnection {
   queue: SongQueue;
+  history: PlayHistory[] = [];
+
   joinedVoiceChannel: VoiceBasedChannel;
   subscription: PlayerSubscription;
   currentAudioResource: AudioResource;

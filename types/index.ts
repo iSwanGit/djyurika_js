@@ -12,3 +12,4 @@ export * from './ServerOption';
 export * from './AddPlaylistConfirmList';
 export * from './LoopType';
 export * from './SongSource';
+export * from './PlayHistory';

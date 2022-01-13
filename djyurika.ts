@@ -9,7 +9,7 @@ import scdl from 'soundcloud-downloader';
 import { SetInfo, TrackInfo } from 'soundcloud-downloader/src/info';
 
 import { environment, keys } from './config';
-import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, SearchError, SearchResult, ServerOption, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
+import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, ServerOption, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
 import { SearchResponseAll } from 'soundcloud-downloader/src/search';
@@ -30,6 +30,7 @@ export class DJYurika {
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
   '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
@@ -42,6 +43,7 @@ export class DJYurika {
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
   '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~m`: 재생목록 순서 변경\n' + 
@@ -59,6 +61,7 @@ export class DJYurika {
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
   '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~m`: 재생목록 순서 변경\n' + 
@@ -271,6 +274,10 @@ export class DJYurika {
         
         case 'pause':
           this.pauseAndResume(message, conn);
+          break;
+
+        case 'history':
+          this.getHistory(message, conn);
           break;
     
         case 'd':
@@ -980,6 +987,36 @@ export class DJYurika {
     }
   }
 
+  /**
+   * 최근 재생한 곡 (음성 채널에 연결한 동안, 최대 5곡으로 제한됨)
+   * @param message 
+   * @param conn 
+   */
+  private getHistory(message: Message | PartialMessage, conn: BotConnection) {
+    if (!conn.history?.length) {
+      return message.channel.send('⚠ `최근 재생한 곡 없음`');
+    }
+  
+    const guildName = message.guild.name;
+    let queueData = '';
+    
+    conn.history.forEach((item, index) => {
+      queueData += `-${index+1}. [${item.title}](${item.url})\n`;
+    });
+    
+    const embedMessage = new MessageEmbed()
+      .setAuthor({
+        name: `${guildName}의 최근 재생 곡`,
+        iconURL: message.guild.me.user.avatarURL(),
+        url: message.guild.me.user.avatarURL()
+      })
+      .setColor('#FFC0CB')
+      .addField('최근 5곡까지만 표시됩니다.', queueData, false);
+      // no title : \u200B
+  
+    return message.channel.send({ embeds: [embedMessage] });
+  }
+
   
   /**
    * 대기열에서 노래 삭제하는 명령 처리 entrypoint
@@ -1428,6 +1465,7 @@ export class DJYurika {
       conn.subscription.unsubscribe();
     }
     conn.queue.songs = [];
+    // conn.history = [];
     conn.joinedVoiceChannel = null;
     conn.subscription = null;
     conn.currentAudioResource = null;
@@ -1441,9 +1479,9 @@ export class DJYurika {
     conn.moveRequestList.clear();
     conn.leaveRequestList.clear();
     conn.addPlaylistConfirmList.clear();
-    if (this.connections.has(serverId)) {
-      this.connections.delete(serverId);
-    }
+    // if (this.connections.has(serverId)) {
+    //   this.connections.delete(serverId);
+    // }
     console.log(`[${serverName}] ` + '음성 채널 연결 종료됨');
   }
   
@@ -1578,15 +1616,17 @@ export class DJYurika {
           delete conn.intervalHandler;
           
           switch (conn.loopFlag) {
-            case LoopType.LIST:
-              conn.queue.songs.push(conn.queue.songs[0]); // no break here, do shift
-              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-            case LoopType.NONE:
-              conn.queue.songs.shift();
-              break;
-            
             case LoopType.SINGLE:
               console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+              break;
+            
+            case LoopType.LIST:
+              conn.queue.songs.push(conn.queue.songs[0]);
+              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+              // no break here, do shift
+            case LoopType.NONE:
+              this.pushPlayHistory(conn.history, conn.queue.songs[0]);
+              conn.queue.songs.shift();
               break;
           }
           this.play(guild, conn.queue.songs[0], conn);
@@ -2593,7 +2633,24 @@ export class DJYurika {
       }
     }, this.interval);
   }
-  
+
+  /**
+   * 최근 플레이 리스트에 추가
+   * @param history 
+   * @param song 
+   */
+  private pushPlayHistory(history: PlayHistory[], song: Song) {
+    // history, 최근순
+    history.unshift({
+      title: song.title,
+      url: song.url,
+    });
+    // length limit
+    if (history.length > 5) {
+      history.length = 5;
+    }
+  }
+
 
 }
 
