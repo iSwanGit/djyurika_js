@@ -1,5 +1,5 @@
-import { Client, DMChannel, EmbedFieldData, Guild, GuildMember, Intents, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, TextChannel, ThreadChannel, User, VoiceBasedChannel, VoiceChannel } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus, PlayerSubscription, StreamType, NoSubscriberBehavior } from '@discordjs/voice';
+import { Client, DMChannel, EmbedFieldData, Guild, GuildMember, Intents, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, TextChannel, ThreadChannel, User, VoiceBasedChannel } from 'discord.js';
+import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 
 import playDl from 'play-dl';
 import ytdl from 'ytdl-core-discord';
@@ -345,6 +345,7 @@ export class DJYurika {
       if (user.id === this.client.user.id) return; // ignore self reaction
       if (!conn.searchResultMsgs.has(reaction.message.id) && !conn.moveRequestList.has(reaction.message.id) && !conn.leaveRequestList.has(reaction.message.id) && !conn.addPlaylistConfirmList.has(reaction.message.id)) return; // ignore reactions from other messages
     
+      // Search result
       selectedMsg = conn.searchResultMsgs.get(reaction.message.id);
       if (selectedMsg) {
         //  except developer or moderator
@@ -352,6 +353,10 @@ export class DJYurika {
           // requested user only
           if (user.id !== selectedMsg.reqUser.id) return;
         }
+        
+        // ignore reaction not provided
+        const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
+        if (selected < 0 || selected >= environment.maxSearchResults * 2) return;
     
         // cancel
         if (reaction.emoji.name === this.cancelEmoji) {
@@ -368,9 +373,7 @@ export class DJYurika {
           reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
           return;
         }
-      
-        const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
-        if (selected < 0 || selected >= environment.maxSearchResults * 2) return;  // ignore other reaction
+
         const [type, url] = selectedMsg.songUrls[selected];
 
         switch (type) {
@@ -388,6 +391,7 @@ export class DJYurika {
         return;
       }
     
+      // Move request
       selectedMsg = conn.moveRequestList.get(reaction.message.id);
       if (selectedMsg) {
         // channel move vote
@@ -407,6 +411,7 @@ export class DJYurika {
         // vote
         const currentJoinedUsers = conn.joinedVoiceChannel.members;
         if (reaction.emoji.name === this.acceptEmoji) {
+          // check accept emoji only
           if (!selectedMsg.acceptedMemberIds.includes(user.id)) {
             selectedMsg.acceptedMemberIds.push(user.id);
           }
@@ -430,6 +435,7 @@ export class DJYurika {
         return;
       }
     
+      // Leave request
       selectedMsg = conn.leaveRequestList.get(reaction.message.id);
       if (selectedMsg) {
         // self vote - ok: **include**, deny: cancel
@@ -448,6 +454,7 @@ export class DJYurika {
         // vote
         const currentJoinedUsers = conn.joinedVoiceChannel.members;
         if (reaction.emoji.name === this.acceptEmoji) {
+          // check accept emoji only
           if (!selectedMsg.acceptedMemberIds.includes(user.id)) {
             selectedMsg.acceptedMemberIds.push(user.id);
           }
@@ -471,20 +478,18 @@ export class DJYurika {
         return;
       }
     
+      // Add playlist confirm
       selectedMsg = conn.addPlaylistConfirmList.get(reaction.message.id);
       if (selectedMsg) {
     
         //  except developer or moderator
         if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
-          const voiceChannel = conn.joinedVoiceChannel ?? reaction.message.guild.members.cache.get(user.id).voice.channel;
           // requested user only
           if (user.id !== selectedMsg.reqUser.id) return;
-          // check requested user is in voice channel
-          if (!voiceChannel) {
-            reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
-            return;
-          }
         }
+
+        // ignore reaction not provided
+        if (![this.acceptEmoji, this.denyEmoji].includes(reaction.emoji.name)) return;
       
         // cancel
         if (reaction.emoji.name === this.cancelEmoji) {
@@ -494,8 +499,16 @@ export class DJYurika {
           conn.searchResultMsgs.delete(reaction.message.id);
           return;
         }
+        
+        // check requested user is in voice channel
+        const voiceChannel = conn.joinedVoiceChannel ?? reaction.message.guild.members.cache.get(user.id).voice.channel;
+        if (!voiceChannel) {
+          reaction.message.reply(`<@${user.id}> 재생을 원하는 음성채널에 들어와서 다시 요청해 주세요.`);
+          return;
+        }
+
         // accept
-        else if (reaction.emoji.name === this.acceptEmoji) {
+        if (reaction.emoji.name === this.acceptEmoji) {
           switch (selectedMsg.provider) {
             case SongSource.YOUTUBE:
               this.playYoutubeRequestList(conn, reaction.message, user, selectedMsg.playlist as ytpl.Result, reaction.message.id);
@@ -508,7 +521,7 @@ export class DJYurika {
         }
       }
     
-      // nothing of both
+      // nothing of all
       return;
     });
   }
