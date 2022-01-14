@@ -1,5 +1,5 @@
 import { GuildMember, Message, VoiceBasedChannel } from 'discord.js';
-import { AudioResource, PlayerSubscription, VoiceConnection } from '@discordjs/voice';
+import { AudioResource, PlayerSubscription } from '@discordjs/voice';
 import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType, PlayHistory } from '.';
 
 export class BotConnection {

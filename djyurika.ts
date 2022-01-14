@@ -1,5 +1,8 @@
-import { Client, DMChannel, EmbedFieldData, Guild, GuildMember, Intents, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, TextChannel, ThreadChannel, User, VoiceBasedChannel } from 'discord.js';
+import { Client, Collection, CommandInteraction, DMChannel, EmbedFieldData, Guild, GuildMember, GuildMemberRoleManager, Intents, InteractionType, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, Role, TextChannel, ThreadChannel, User, VoiceBasedChannel } from 'discord.js';
 import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { REST } from '@discordjs/rest';
+import { Routes } from 'discord-api-types/v9';
+import { SlashCommandBuilder } from '@discordjs/builders';
 
 import playDl from 'play-dl';
 import ytdl from 'ytdl-core-discord';
@@ -7,15 +10,16 @@ import ytdlc, { videoInfo } from 'ytdl-core';  // for using type declaration
 import ytpl from 'ytpl';
 import scdl from 'soundcloud-downloader';
 import { SetInfo, TrackInfo } from 'soundcloud-downloader/src/info';
+import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
-import { environment, keys } from './config';
-import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, ServerOption, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
+import { commands, environment, keys } from './config';
+import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
-import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
 export class DJYurika {
   private readonly client: Client;
+  private readonly rest: REST;
   private readonly db: DJYurikaDB;
 
   private readonly selectionEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
@@ -82,6 +86,7 @@ export class DJYurika {
   
   constructor() {
     this.db = new DJYurikaDB();
+    this.rest = new REST({ version: '9' }).setToken(keys.botToken);
     this.client = new Client({ intents: [
       Intents.FLAGS.GUILDS,
       Intents.FLAGS.GUILD_INVITES,
@@ -110,6 +115,7 @@ export class DJYurika {
 
   public async start() {
     try {
+      this.registerSlashCommandInteraction();
       this.registerConnectionHandler();
       this.registerVoiceStateUpdateHandler();
       this.registerMessageHandler();
@@ -152,8 +158,47 @@ export class DJYurika {
     console.log(`${environment.overrideConfigs.length} configs overrided`);
   }
 
+  private async refreshSlashCommand() {
+    const guilds = this.client.guilds.cache;
+
+    console.log('Start refreshing application (/) commands...');
+    
+    for (const [id, guild] of guilds) {
+      try {
+        await this.rest.put(
+          Routes.applicationGuildCommands(keys.clientId, id),
+          { body: commands }
+        );
+      }
+      catch (err) {
+        console.error(`[${guild.name}] ${err.message}`);
+      }
+    }
+    
+    console.log('refresh end');
+  }
+
+  private registerSlashCommandInteraction() {
+    this.client.on('interactionCreate', async (interaction) => {
+      if (!interaction.isCommand()) return;
+    
+      const { commandName } = interaction;
+
+      switch (commandName) {
+        case 'help':
+          await this.sendHelp(interaction);
+          break;
+        
+        case 'queue':
+          await interaction.reply('Server info.');
+          break;
+      }
+    });
+  }
+
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
+      this.refreshSlashCommand();
       this.refreshServerName();
       this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
       setInterval(() => {
@@ -212,14 +257,13 @@ export class DJYurika {
     
       // check sender is in voice channel (except moderator and developer)
       const voiceChannel = message.member.voice.channel;
-      if (!(checkDeveloperRole(message.member, cfg) || checkModeratorRole(message.member, cfg))) {
+      if (!(checkDeveloperRole(message.member.roles.cache, cfg) || checkModeratorRole(message.member.roles.cache, cfg))) {
         if (!voiceChannel) {
           message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
           return;
         }
       }
-    
-    
+
       switch (cmd.toLowerCase()) {
         case 'p':
         case 'ㅔ':
@@ -260,7 +304,7 @@ export class DJYurika {
           break;
     
         case 'npid':
-          if (checkDeveloperRole(message.member, cfg)) {
+          if (checkDeveloperRole(message.member.roles.cache, cfg)) {
             if (conn.queue && conn.queue.songs.length > 0) {
               message.channel.send(`🎵 id: \`${conn.queue.songs[0]?.id}\``)
             }
@@ -281,19 +325,19 @@ export class DJYurika {
           break;
     
         case 'd':
-          if (checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+          if (checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.deleteSong(message, conn);
           }
           break;
     
         case 'm':
-          if (checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+          if (checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.modifyOrder(message, conn);
           }
           break;
     
         case 'c':
-          if (checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+          if (checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.clearQueue(message, conn);
           }
           break;
@@ -303,19 +347,19 @@ export class DJYurika {
           break;
     
         case 'v':
-          if (checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+          if (checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.changeVolume(message, conn);
           }
           break;
     
         case 'cl':
-          if (checkDeveloperRole(message.member, cfg)) {
+          if (checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.loadConfig(message, conn);
           }
           break;
     
         case 'cs':
-          if (checkDeveloperRole(message.member, cfg)) {
+          if (checkDeveloperRole(message.member.roles.cache, cfg)) {
             this.saveConfig(message, conn);
           }
           break;
@@ -349,7 +393,7 @@ export class DJYurika {
       selectedMsg = conn.searchResultMsgs.get(reaction.message.id);
       if (selectedMsg) {
         //  except developer or moderator
-        if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
+        if (!(checkDeveloperRole(reactedUser.roles.cache, servOpt) || checkModeratorRole(reactedUser.roles.cache, servOpt))) {
           // requested user only
           if (user.id !== selectedMsg.reqUser.id) return;
         }
@@ -483,7 +527,7 @@ export class DJYurika {
       if (selectedMsg) {
     
         //  except developer or moderator
-        if (!(checkDeveloperRole(reactedUser, servOpt) || checkModeratorRole(reactedUser, servOpt))) {
+        if (!(checkDeveloperRole(reactedUser.roles.cache, servOpt) || checkModeratorRole(reactedUser.roles.cache, servOpt))) {
           // requested user only
           if (user.id !== selectedMsg.reqUser.id) return;
         }
@@ -688,14 +732,21 @@ export class DJYurika {
     }
   }
 
-  private sendHelp(message: Message) {
-    const opt = this.connections.get(message.guild.id).config;
+  // TODO: 명령어 분기 함수화
+  private commandSwitchHandler(cmd: string) {
+
+  }
+
+  private sendHelp(sourceObj: Message | CommandInteraction) {
+    const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
+
+    const opt = this.serverConfigs.get(sourceObj.guildId) ?? this.overrideConfigs.get(sourceObj.guildId);
     const cmdName = '명령어';
     let cmdValue: string;
-    if (checkDeveloperRole(message.member, opt)) {
+    if (checkDeveloperRole(roles, opt)) {
       cmdValue = this.helpCmdDev;
     }
-    else if (checkModeratorRole(message.member, opt)) {
+    else if (checkModeratorRole(roles, opt)) {
       cmdValue = this.helpCmdMod;
     }
     else {
@@ -705,7 +756,7 @@ export class DJYurika {
     const embedMessage = new MessageEmbed()
       .setAuthor({
         name: '사용법',
-        iconURL: message.guild.me.user.avatarURL(),
+        iconURL: sourceObj.guild.me.user.avatarURL(),
         url: environment.githubRepoUrl
       })
       .setColor('#ffff00')
@@ -716,7 +767,7 @@ export class DJYurika {
         },
       );
   
-    return message.channel.send({ embeds: [embedMessage] });
+      return sourceObj.reply({ embeds: [embedMessage] });
   }
 
   private async execute(message: Message | PartialMessage, conn: BotConnection) {
@@ -1149,7 +1200,7 @@ export class DJYurika {
     }
     // if no summoner, channel summoner, moderator or developer, do stop
     if (!conn.channelJoinRequestMember || conn.channelJoinRequestMember?.id === message.member.id
-        || checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+        || checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
       return this.stop(message, null, conn);
     }
     // ignore if user is not in my voice channel
@@ -1254,7 +1305,7 @@ export class DJYurika {
   
     // move if no summoner, summoner's request, or if no one in current voice channel
     if (!conn.channelJoinRequestMember || message.member.id === conn.channelJoinRequestMember?.id
-        || conn.joinedVoiceChannel.members.size === 1 || checkModeratorRole(message.member, cfg) || checkDeveloperRole(message.member, cfg)) {
+        || conn.joinedVoiceChannel.members.size === 1 || checkModeratorRole(message.member.roles.cache, cfg) || checkDeveloperRole(message.member.roles.cache, cfg)) {
       this.moveVoiceChannel(conn, null, message.member, message.channel, userVoiceChannel);
       return;
     }

@@ -8,7 +8,6 @@ export * from './LeaveRequest';
 export * from './UpdatedVoiceState';
 export * from './Config';
 export * from './BotConnection';
-export * from './ServerOption';
 export * from './AddPlaylistConfirmList';
 export * from './LoopType';
 export * from './SongSource';

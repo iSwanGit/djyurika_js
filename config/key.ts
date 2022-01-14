@@ -3,4 +3,5 @@ export const keys = {
   botToken: 'your_token',
 	youtubeApiKey: 'your_key',
   soundcloudClientId: 'client_id',
+  clientId: 'client_id',
 }

@@ -1,4 +1,5 @@
-import { GuildMember } from 'discord.js';
+import { APIInteractionGuildMember } from 'discord-api-types';
+import { Collection, GuildMember, Role } from 'discord.js';
 import request from 'request-promise-native';
 import { environment, keys } from './config';
 import { Config, YoutubeSearch } from './types';
@@ -8,15 +9,15 @@ export function fillZeroPad(num: number, width: number) {
   return n.length >= width ? n : new Array(width - n.length + 1).join('0') + n;
 }
 
-export function checkDeveloperRole(member: GuildMember, cfg: Config) {
-  return member.roles.cache.find(role => {    
+export function checkDeveloperRole(memberRoles: Collection<string, Role>, cfg: Config) {
+  return memberRoles.find(role => {    
     if (!cfg?.developerRoleID) return true;  // undefined always pass
     return role?.id === cfg.developerRoleID;
   });
 }
 
-export function checkModeratorRole(member: GuildMember, cfg: Config) {
-  return member.roles.cache.find(role => {
+export function checkModeratorRole(memberRoles: Collection<string, Role>, cfg: Config) {
+  return memberRoles.find(role => {
     if (!cfg?.moderatorRoleID) return true;  // undefined always pass
     return role?.id === cfg.moderatorRoleID;
   });
