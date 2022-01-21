@@ -247,7 +247,7 @@ export class DJYurika {
       if (message.content.startsWith('~~')) return;   // ignore markdown syntax
     
       // ignore messages from another channel
-      if (message.channel.id !== cfg.commandChannelID) return;
+      if (message.channel.id !== cfg?.commandChannelID) return;
     
       // need help?
       const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
@@ -741,7 +741,7 @@ export class DJYurika {
   private sendHelp(sourceObj: Message | CommandInteraction) {
     const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
 
-    const opt = this.serverConfigs.get(sourceObj.guildId) ?? this.overrideConfigs.get(sourceObj.guildId);
+    const opt = this.overrideConfigs.get(sourceObj.guildId) ?? this.serverConfigs.get(sourceObj.guildId);
     const cmdName = '명령어';
     let cmdValue: string;
     if (checkDeveloperRole(roles, opt)) {
@@ -1663,6 +1663,7 @@ export class DJYurika {
       // newState 상태에 대한 이벤트임
       subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
         // 재생 시작 -> buffering, playing
+        console.info(`${oldState.status} -> ${newState.status}`);
         // time counter start
         conn.playTimeCounterHandler = setInterval(() => {
           if (subscription.player.state.status === AudioPlayerStatus.Playing) {
@@ -1672,6 +1673,7 @@ export class DJYurika {
       })
       .once(AudioPlayerStatus.Idle, async (oldState, newState) => {
         // 재생 끝: playing -> idle
+        console.info(`${oldState.status} -> ${newState.status}`);
         console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
         
         // const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
