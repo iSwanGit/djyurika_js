@@ -118,6 +118,12 @@ export class DJYurikaDB {
     catch (err) { console.error(err); }
   }
 
+  /**
+   * 최근 5개 재생항목 (not implemented)
+   * @param server 
+   */
+  public async getPlayHistory(server: string) { }
+
   public async increasePlayCount(song: Song, server: string) {
     try {
       const conn = await this.pool.getConnection();
