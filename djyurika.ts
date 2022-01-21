@@ -860,7 +860,8 @@ export class DJYurika {
       message.channel.send('🔂 `한곡 반복 해제됨`');
     }
     if (conn.joinedVoiceChannel && conn.subscription.player) {
-      // conn.subscription.unsubscribe();
+      // 일시정지 풀어야 함
+      if (conn.subscription.player.state.status === AudioPlayerStatus.Paused) conn.subscription.player.unpause();
       conn.subscription.player.stop();
     }
   }
@@ -1227,7 +1228,8 @@ export class DJYurika {
     conn.skipFlag = true;
     conn.queue.songs.unshift(song);
 
-    // conn.subscription.unsubscribe();
+    // 일시정지 풀어야 함
+    if (conn.subscription.player.state.status === AudioPlayerStatus.Paused) conn.subscription.player.unpause();
     conn.subscription.player.stop();
   }
   
@@ -1604,20 +1606,27 @@ export class DJYurika {
       subscription.player.play(conn.currentAudioResource);
 
       // register eventListener
-      // newState 상태에 대한 이벤트임
+      // newState 상태에 대한 이벤트임,
+      // memo: 일시정지는 여러번 할 수 있지만, interval 관련은 한번 불려야 함. 그리고 무엇보다 곡 넘길때 재생한 곡수만큼 중복으로 불린다. once 필수
+      // subscription.player.once(AudioPlayerStatus.Paused, (oldState, newState) => {
+      //   console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+      // });
       subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
+        // 일시정지 재개  -> paused, playing
         // 재생 시작 -> buffering, playing
-        console.info(`${oldState.status} -> ${newState.status}`);
+        console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
         // time counter start
-        conn.playTimeCounterHandler = setInterval(() => {
-          if (subscription.player.state.status === AudioPlayerStatus.Playing) {
-            conn.playTimeCounter += environment.timeCounterTickInterval;
-          }
-        }, environment.timeCounterTickInterval);
+        if (oldState.status === AudioPlayerStatus.Buffering) {
+          conn.playTimeCounterHandler = setInterval(() => {
+            if (subscription.player.state.status === AudioPlayerStatus.Playing) {
+              conn.playTimeCounter += environment.timeCounterTickInterval;
+            }
+          }, environment.timeCounterTickInterval);
+        }
       })
       .once(AudioPlayerStatus.Idle, async (oldState, newState) => {
         // 재생 끝: playing -> idle
-        console.info(`${oldState.status} -> ${newState.status}`);
+        console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
         console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
         
         // const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
