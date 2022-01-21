@@ -398,10 +398,6 @@ export class DJYurika {
           if (user.id !== selectedMsg.reqUser.id) return;
         }
         
-        // ignore reaction not provided
-        const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
-        if (selected < 0 || selected >= environment.maxSearchResults * 2) return;
-    
         // cancel
         if (reaction.emoji.name === this.cancelEmoji) {
           reaction.message.edit('⚠ `검색 취소됨`');
@@ -411,6 +407,10 @@ export class DJYurika {
           return;
         }
 
+        // ignore reaction not provided
+        const selected = this.selectionEmojis.indexOf(reaction.emoji.name);
+        if (selected < 0 || selected >= environment.maxSearchResults * 2) return;
+    
         // check bot or requested user is in voice channel
         const voiceChannel = conn.joinedVoiceChannel ?? reaction.message.guild.members.cache.get(user.id).voice.channel;
         if (!voiceChannel) {
