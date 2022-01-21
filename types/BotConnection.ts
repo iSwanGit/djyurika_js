@@ -11,10 +11,12 @@ export class BotConnection {
   currentAudioResource: AudioResource;
   channelJoinRequestMember: GuildMember;
   recentNowPlayingMessage: Message;
-  intervalHandler: NodeJS.Timeout;
+  npMsgIntervalHandler: NodeJS.Timeout;
+  playTimeCounterHandler: NodeJS.Timeout;
   config: Config;
 
   songStartTimestamp: number;
+  playTimeCounter = 0;
   skipFlag = false;
   loopFlag = LoopType.NONE;
 

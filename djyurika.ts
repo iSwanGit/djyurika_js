@@ -171,7 +171,7 @@ export class DJYurika {
         );
       }
       catch (err) {
-        console.error(`[${guild.name}] ${err.message}`);
+        console.error(`[${guild.name}] ${err}`);
       }
     }
     
@@ -244,6 +244,7 @@ export class DJYurika {
     
       if (message.author.bot) return;   // ignore self message
       if (!message.content.startsWith(environment.prefix)) return;  // ignore not including prefix
+      if (message.content.startsWith('~~')) return;   // ignore markdown syntax
     
       // ignore messages from another channel
       if (message.channel.id !== cfg.commandChannelID) return;
@@ -872,20 +873,21 @@ export class DJYurika {
     const song = conn.queue.songs[0];
     if (!song) return message.channel.send('`Error: song object not defined`');  // prevent error
     // calculate current playtime. 1/3 scale
-    // conn.subscription.player.playable
-    // var playtime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
-    // const currentPoint = Math.round(playtime / song.duration * 100 / 4);
-    // var playbar: string[] | string = Array(26).fill('▬');
-    // playbar[currentPoint] = '🔘';
-    // playbar = playbar.join('');
-    // var remaintime: number | string = song.duration - playtime;
-    // if (song.duration >= 3600) {
-    //   playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-    //   remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-    // } else {
-    //   playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-    //   remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-    // }
+
+    // var playTime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
+    let playTime: number | string = conn.playTimeCounter / 1000;
+    const currentPoint = Math.round(playTime / song.duration * 100 / 4);
+    let playBar: string[] | string = Array(26).fill('▬');
+    playBar[currentPoint] = '🔘';
+    playBar = playBar.join('');
+    var remainTime: number | string = song.duration - playTime;
+    if (song.duration >= 3600) {
+      playTime = `${Math.trunc(playTime / 3600)}:${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+      remainTime = `-${Math.trunc(remainTime / 3600)}:${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+    } else {
+      playTime = `${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+      remainTime = `-${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+    }
   
     const embedMessage = new MessageEmbed()
       .setAuthor({
@@ -899,8 +901,8 @@ export class DJYurika {
       .addFields(
         {
           name: '\u200B', // invisible zero width space
-          value:  `**선곡: <@${song.requestUserId}>**`, // playbar
-          // value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+          // value:  `**선곡: <@${song.requestUserId}>**`, // playbar
+          value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playTime}\` \`${playBar}\` \`${remainTime}\``, // playbar
           inline: false,
         },
         {
@@ -1538,7 +1540,9 @@ export class DJYurika {
     conn.loopFlag = LoopType.NONE;
     conn.skipFlag = false;
     // client.user.setActivity();
-    clearInterval(conn.intervalHandler);
+    clearInterval(conn.npMsgIntervalHandler);
+    conn.playTimeCounter = 0;
+    clearInterval(conn.playTimeCounterHandler);
     conn.searchResultMsgs.clear();
     conn.moveRequestList.clear();
     conn.leaveRequestList.clear();
@@ -1624,8 +1628,8 @@ export class DJYurika {
       console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
     }
   
-    const voiceChannel = getVoiceConnection(guild.id);
-    const subscription = conn.subscription?.player ? conn.subscription : voiceChannel?.subscribe(createAudioPlayer({
+    const voiceConnection = getVoiceConnection(guild.id);
+    const subscription = conn.subscription?.player ? conn.subscription : voiceConnection?.subscribe(createAudioPlayer({
       // behaviors: {
       //   noSubscriber: NoSubscriberBehavior.Stop
       // }
@@ -1652,49 +1656,65 @@ export class DJYurika {
       conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
 
       // play
+      conn.playTimeCounter = 0;
       subscription.player.play(conn.currentAudioResource);
 
       // register eventListener
-      subscription.player.once(AudioPlayerStatus.Idle, async (oldState, newState) => {
-        if (oldState.status !== AudioPlayerStatus.Idle && newState.status === AudioPlayerStatus.Idle) {
-          console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
-          const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
-          if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-            console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
-            (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
-              `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-            );
+      // newState 상태에 대한 이벤트임
+      subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
+        // 재생 시작 -> buffering, playing
+        // time counter start
+        conn.playTimeCounterHandler = setInterval(() => {
+          if (subscription.player.state.status === AudioPlayerStatus.Playing) {
+            conn.playTimeCounter += environment.timeCounterTickInterval;
           }
+        }, environment.timeCounterTickInterval);
+      })
+      .once(AudioPlayerStatus.Idle, async (oldState, newState) => {
+        // 재생 끝: playing -> idle
+        console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
+        
+        // const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
+        // 재생시각 카운터 멈추고 시간 구하기
+        clearInterval(conn.playTimeCounterHandler);
+        const playedTime = Math.round(conn.playTimeCounter / 1000);
 
-          // if bot is alone and queue is empty, then stop
-          if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
-            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-            this.stop(message, null, conn);
-            return;
-          }
-
-          conn.skipFlag = false;  // reset flag
-
-          conn.recentNowPlayingMessage = null;
-          clearInterval(conn.intervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
-          delete conn.intervalHandler;
-          
-          switch (conn.loopFlag) {
-            case LoopType.SINGLE:
-              console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
-              break;
-            
-            case LoopType.LIST:
-              conn.queue.songs.push(conn.queue.songs[0]);
-              console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
-              // no break here, do shift
-            case LoopType.NONE:
-              this.pushPlayHistory(conn.history, conn.queue.songs[0]);
-              conn.queue.songs.shift();
-              break;
-          }
-          this.play(guild, conn.queue.songs[0], conn);
+        if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
+          console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+          (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
+            `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+          );
         }
+
+        // if bot is alone and queue is empty, then stop
+        if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
+          const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+          this.stop(message, null, conn);
+          return;
+        }
+
+        conn.skipFlag = false;  // reset flag
+
+        conn.recentNowPlayingMessage = null;
+        clearInterval(conn.npMsgIntervalHandler);  // force stop, 비동기라서 명령들이 빠르게 겹치면 인터벌 안죽음
+        delete conn.npMsgIntervalHandler;
+        
+        switch (conn.loopFlag) {
+          case LoopType.SINGLE:
+            console.info(`[${guild.name}] ` + `한곡 반복 설정 중`);
+            break;
+          
+          case LoopType.LIST:
+            conn.queue.songs.push(conn.queue.songs[0]);
+            console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
+            // no break here, do shift
+          case LoopType.NONE:
+            this.pushPlayHistory(conn.history, conn.queue.songs[0]);
+            conn.queue.songs.shift();
+            break;
+        }
+        this.play(guild, conn.queue.songs[0], conn);
+      
       })
       .on("error", error => {
         conn.queue.textChannel.send('```cs\n'+
@@ -1716,7 +1736,7 @@ export class DJYurika {
       console.error(err);
       console.info('Song url was ' + song.url)
       // conn.queue.textChannel.send(`⚠ Error: ${err.message}. Skip \`${song.url}\`.`);
-      if (voiceChannel) {
+      if (voiceConnection) {
         conn.queue.songs.shift();
         this.play(guild, conn.queue.songs[0], conn);
       }
@@ -2566,13 +2586,13 @@ export class DJYurika {
   }
   
   private updateNowPlayingProgrssbar(conn: BotConnection) {
-    if (conn.intervalHandler) {
+    if (conn.npMsgIntervalHandler) {
       // double check
-      clearInterval(conn.intervalHandler);
-      delete conn.intervalHandler;
+      clearInterval(conn.npMsgIntervalHandler);
+      delete conn.npMsgIntervalHandler;
     }
   
-    conn.intervalHandler = setInterval(() => {
+    conn.npMsgIntervalHandler = setInterval(() => {
       try {
         if (!conn.recentNowPlayingMessage) {
           throw Error('Now playing message ref is changed to null, stop update');
@@ -2582,20 +2602,20 @@ export class DJYurika {
           if (!song) throw Error('Song object not defined');  // prevent error
           
           // calculate current playtime. 1/3 scale
-          // conn.subscription.connection.
-          // var playtime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
-          // const currentPoint = Math.round(playtime / song.duration * 100 / 4);
-          // var playbar: string[] | string = Array(26).fill('▬');
-          // playbar[currentPoint] = '🔘';
-          // playbar = playbar.join('');
-          // var remaintime: number | string = song.duration - playtime;
-          // if (song.duration >= 3600) {
-          //   playtime = `${Math.trunc(playtime / 3600)}:${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-          //   remaintime = `-${Math.trunc(remaintime / 3600)}:${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-          // } else {
-          //   playtime = `${fillZeroPad(Math.trunc((playtime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playtime % 60), 2)}`;
-          //   remaintime = `-${fillZeroPad(Math.trunc((remaintime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(remaintime % 60), 2)}`;
-          // }
+          
+          let playTime: number | string = conn.playTimeCounter / 1000;
+          const currentPoint = Math.round(playTime / song.duration * 100 / 4);
+          let playBar: string[] | string = Array(26).fill('▬');
+          playBar[currentPoint] = '🔘';
+          playBar = playBar.join('');
+          var remainTime: number | string = song.duration - playTime;
+          if (song.duration >= 3600) {
+            playTime = `${Math.trunc(playTime / 3600)}:${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+            remainTime = `-${Math.trunc(remainTime / 3600)}:${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+          } else {
+            playTime = `${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+            remainTime = `-${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+          }
   
           const embedMessage = new MessageEmbed()
           .setAuthor({
@@ -2609,8 +2629,8 @@ export class DJYurika {
           .addFields(
             {
               name: '\u200B', // invisible zero width space
-              value:  `**선곡: <@${song.requestUserId}>**`, // playbar
-              // value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playtime}\` \`${playbar}\` \`${remaintime}\``, // playbar
+              // value:  `**선곡: <@${song.requestUserId}>**`, // playbar
+              value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playTime}\` \`${playBar}\` \`${remainTime}\``, // playbar
               inline: false,
             },
             {
@@ -2649,8 +2669,8 @@ export class DJYurika {
       catch (err) {
         // cannot catch DiscordAPIError (api issue)
         console.info(`[${conn.joinedVoiceChannel.guild.name}] ${err.message}`);
-        clearInterval(conn.intervalHandler);
-        delete conn.intervalHandler;
+        clearInterval(conn.npMsgIntervalHandler);
+        delete conn.npMsgIntervalHandler;
       }
     }, this.interval);
   }
