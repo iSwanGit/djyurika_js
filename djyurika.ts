@@ -869,71 +869,15 @@ export class DJYurika {
     if (!conn.queue || conn.queue.songs.length === 0 || !conn.joinedVoiceChannel || !conn.subscription?.player) {
       return;
     }
-  
-    const song = conn.queue.songs[0];
-    if (!song) return message.channel.send('`Error: song object not defined`');  // prevent error
-    // calculate current playtime. 1/3 scale
-
-    // var playTime: number | string = conn.joinedVoiceChannel.dispatcher.streamTime / 1000;
-    let playTime: number | string = conn.playTimeCounter / 1000;
-    const currentPoint = Math.round(playTime / song.duration * 100 / 4);
-    let playBar: string[] | string = Array(26).fill('▬');
-    playBar[currentPoint] = '🔘';
-    playBar = playBar.join('');
-    var remainTime: number | string = song.duration - playTime;
-    if (song.duration >= 3600) {
-      playTime = `${Math.trunc(playTime / 3600)}:${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
-      remainTime = `-${Math.trunc(remainTime / 3600)}:${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
-    } else {
-      playTime = `${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
-      remainTime = `-${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+    try {
+      const embedMessage = this.createNowPlayingEmbed(conn);
+      
+      conn.recentNowPlayingMessage = await message.channel.send({ embeds: [embedMessage] });
+      this.updateNowPlayingProgrssbar(conn);
     }
-  
-    const embedMessage = new MessageEmbed()
-      .setAuthor({
-        name: `${conn.joinedVoiceChannel.name} 에서 재생 중 ${conn.subscription.player.state.status === AudioPlayerStatus.Paused ? '(일시 정지됨)' : ''}`,
-        iconURL: message.guild.me.user.avatarURL(),
-        url: song.url
-      })
-      .setColor('#0000ff')
-      .setDescription(`[${song.title}](${song.url})`)
-      .setThumbnail(song.thumbnail)
-      .addFields(
-        {
-          name: '\u200B', // invisible zero width space
-          // value:  `**선곡: <@${song.requestUserId}>**`, // playbar
-          value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playTime}\` \`${playBar}\` \`${remainTime}\``, // playbar
-          inline: false,
-        },
-        {
-          name: '채널',
-          value:  song.channel,
-          inline: true,
-        },
-        {
-          name:   '길이',
-          value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
-          inline: true,
-        }
-      );
-  
-    switch (song.source) {
-      case SongSource.YOUTUBE:
-        embedMessage.setFooter({
-          text: 'Youtube', 
-          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
-        });
-        break;
-      case SongSource.SOUNDCLOUD:
-        embedMessage.setFooter({
-          text: 'SoundCloud',
-          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
-        });
-        break;
+    catch (err) {
+      message.channel.send(`\`Error: ${err.message}\``);
     }
-    
-    conn.recentNowPlayingMessage = await message.channel.send({ embeds: [embedMessage] });
-    this.updateNowPlayingProgrssbar(conn);
   }
   
   private async getQueue(message: Message | PartialMessage, conn: BotConnection) {
@@ -2600,72 +2544,17 @@ export class DJYurika {
           throw Error('Now playing message ref is changed to null, stop update');
         }
         else {
-          const song = conn.queue.songs[0];
-          if (!song) throw Error('Song object not defined');  // prevent error
-          
-          // calculate current playtime. 1/3 scale
-          
-          let playTime: number | string = conn.playTimeCounter / 1000;
-          const currentPoint = Math.round(playTime / song.duration * 100 / 4);
-          let playBar: string[] | string = Array(26).fill('▬');
-          playBar[currentPoint] = '🔘';
-          playBar = playBar.join('');
-          var remainTime: number | string = song.duration - playTime;
-          if (song.duration >= 3600) {
-            playTime = `${Math.trunc(playTime / 3600)}:${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
-            remainTime = `-${Math.trunc(remainTime / 3600)}:${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
-          } else {
-            playTime = `${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
-            remainTime = `-${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
-          }
-  
-          const embedMessage = new MessageEmbed()
-          .setAuthor({
-            name: `${conn.joinedVoiceChannel.name} 에서 재생 중`,
-            iconURL: this.client.user.avatarURL(),
-            url: song.url
-          })
-          .setColor('#0000ff')
-          .setDescription(`[${song.title}](${song.url})`)
-          .setThumbnail(song.thumbnail)
-          .addFields(
-            {
-              name: '\u200B', // invisible zero width space
-              // value:  `**선곡: <@${song.requestUserId}>**`, // playbar
-              value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playTime}\` \`${playBar}\` \`${remainTime}\``, // playbar
-              inline: false,
-            },
-            {
-              name: '채널',
-              value:  song.channel,
-              inline: true,
-            },
-            {
-              name:   '길이',
-              value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
-              inline: true,
+          try {
+            const embedMessage = this.createNowPlayingEmbed(conn);
+            
+            if (conn.recentNowPlayingMessage.editable) {
+              conn.recentNowPlayingMessage.edit({ embeds: [embedMessage] });
             }
-          );
-  
-          switch (song.source) {
-            case SongSource.YOUTUBE:
-              embedMessage.setFooter({
-                text: 'Youtube', 
-                iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
-              });
-              break;
-            case SongSource.SOUNDCLOUD:
-              embedMessage.setFooter({
-                text: 'SoundCloud',
-                iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
-              });
-              break;
+            else throw Error('Now playing message is deleted');
           }
-  
-          if (conn.recentNowPlayingMessage.editable) {
-            conn.recentNowPlayingMessage.edit({ embeds: [embedMessage] });
+          catch (err) {
+            conn.recentNowPlayingMessage.channel.send(`\`Error: ${err.message}\``);
           }
-          else throw Error('Now playing message is deleted');
         }
       }
       catch (err) {
@@ -2721,6 +2610,71 @@ export class DJYurika {
     });
 
     return connection;
+  }
+
+  private createNowPlayingEmbed(conn: BotConnection): MessageEmbed {
+    const song = conn.queue.songs[0];
+    if (!song) throw Error('song object not defined');  // prevent error
+    // calculate current playtime. 1/3 scale
+
+    let playTime: number | string = conn.playTimeCounter / 1000;
+    const currentPoint = Math.round(playTime / song.duration * 100 / 4);
+    let playBar: string[] | string = Array(26).fill('▬');
+    playBar[currentPoint] = '🔘';
+    playBar = playBar.join('');
+    var remainTime: number | string = song.duration - playTime;
+    if (song.duration >= 3600) {
+      playTime = `${Math.trunc(playTime / 3600)}:${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+      remainTime = `-${Math.trunc(remainTime / 3600)}:${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+    } else {
+      playTime = `${fillZeroPad(Math.trunc((playTime % 3600) / 60), 2)}:${fillZeroPad(Math.trunc(playTime % 60), 2)}`;
+      remainTime = `-${fillZeroPad(Math.trunc((remainTime % 3600) / 60), 2)}:${fillZeroPad(Math.floor(remainTime % 60), 2)}`;
+    }
+  
+    const embedMessage = new MessageEmbed()
+      .setAuthor({
+        name: `${conn.joinedVoiceChannel.name} 에서 재생 중 ${conn.subscription.player.state.status === AudioPlayerStatus.Paused ? '(일시 정지됨)' : ''}`,
+        iconURL: this.client.user.avatarURL(),
+        url: song.url
+      })
+      .setColor('#0000ff')
+      .setDescription(`[${song.title}](${song.url})`)
+      .setThumbnail(song.thumbnail)
+      .addFields(
+        {
+          name: '\u200B', // invisible zero width space
+          // value:  `**선곡: <@${song.requestUserId}>**`, // playbar
+          value:  `**선곡: <@${song.requestUserId}>**\n\n\`${playTime}\` \`${playBar}\` \`${remainTime}\``, // playbar
+          inline: false,
+        },
+        {
+          name: '채널',
+          value:  song.channel,
+          inline: true,
+        },
+        {
+          name:   '길이',
+          value:  `${fillZeroPad(song.durationH, 2)}:${fillZeroPad(song.durationM, 2)}:${fillZeroPad(song.durationS, 2)}`,
+          inline: true,
+        }
+      );
+  
+    switch (song.source) {
+      case SongSource.YOUTUBE:
+        embedMessage.setFooter({
+          text: 'Youtube', 
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/youtube_social_circle_red.png'
+        });
+        break;
+      case SongSource.SOUNDCLOUD:
+        embedMessage.setFooter({
+          text: 'SoundCloud',
+          iconURL: 'https://discord.hatsunemiku.kr/files/djyurika_icon/soundcloud.png'
+        });
+        break;
+    }
+
+    return embedMessage;
   }
 
 }
