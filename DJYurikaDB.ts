@@ -11,9 +11,9 @@ export class DJYurikaDB {
     this.init();
   }
 
-  private async init() {
+  private init() {
     try {
-      this.pool = await createPool(keys.dbServer);
+      this.pool = createPool(keys.dbServer);
       console.log('DB pool created')
       // const conn = await this.pool.getConnection();
       // this.songList = await conn.query("SELECT * FROM playlist");
