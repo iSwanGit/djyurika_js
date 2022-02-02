@@ -107,7 +107,10 @@ export class DJYurikaDB {
   public async getRandomSongID(server: string): Promise<Song> {
     try {
       const conn = await this.pool.getConnection();
-      let idRows: any = (await conn.query('SELECT id, url, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
+      let idRows: any[] = (await conn.query('SELECT id, url, source FROM playlist WHERE guild = ? ORDER BY RAND()', server));
+      if (idRows.length === 0) {
+        throw Error('History is empty');
+      }
       idRows = idRows.sort(() => Math.random() - 0.5);  // shuffle one more
       const res = idRows[0] as Song;  // reduce shuffle batch
       // const res = idRows[getRandomInt(0, idRows.length)] as Song; 
@@ -115,7 +118,10 @@ export class DJYurikaDB {
       conn.end();
       return song;
     }
-    catch (err) { console.error(err); }
+    catch (err) {
+      console.error(err);
+      throw err;
+    }
   }
 
   /**

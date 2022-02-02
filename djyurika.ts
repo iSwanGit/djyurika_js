@@ -1568,10 +1568,19 @@ export class DJYurika {
   
   private async play(guild: Guild, song: Song, conn: BotConnection) {  
     // Yurika Random
-    if (!song) {
-      song = await this.selectRandomSong(guild);
-      conn.queue.songs.push(song);
-      console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
+    try {
+      if (!song) {
+        song = await this.selectRandomSong(guild);
+        conn.queue.songs.push(song);
+        console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
+      }
+    }
+    catch (err) {
+      // console.log(err);
+      conn.queue.textChannel.send(`⚠ Error: ${err.message}.`);
+      getVoiceConnection(guild.id).destroy();
+      // throw err;
+      return;
     }
   
     const voiceConnection = getVoiceConnection(guild.id);
@@ -2581,6 +2590,9 @@ export class DJYurika {
    * @param song 
    */
   private pushPlayHistory(history: PlayHistory[], song: Song) {
+    if (!song) {
+      return;
+    }
     // history, 최근순
     history.unshift({
       title: song.title,
