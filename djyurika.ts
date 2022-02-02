@@ -199,7 +199,7 @@ export class DJYurika {
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
       this.refreshSlashCommand();
-      this.refreshServerName();
+      this.refreshAllServerName();
       this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
       setInterval(() => {
         this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
@@ -218,6 +218,10 @@ export class DJYurika {
     this.client.on('guildUpdate', (oldGuild, newGuild) => {
       // 채널 및 역할 검증
       // 서버 이름 변경 확인
+
+      if (oldGuild.name !== newGuild.name) {
+        this.refreshServerName(newGuild.id, newGuild.name);
+      }
     });
   }
 
@@ -712,7 +716,7 @@ export class DJYurika {
 
   // -------- function definition -------
 
-  private async refreshServerName() {
+  private async refreshAllServerName() {
     console.log('Refreshing server(guild) info...');
     for (const cfg of this.serverConfigs.values()) {
       await this.client.guilds.fetch(cfg.server)
@@ -731,6 +735,17 @@ export class DJYurika {
         console.error(`${err.name}: ${err.message} (${cfg.server}, ${cfg.name})`);
       });
     }
+  }
+
+  private refreshServerName(server: string, newName: string) {
+    const config = this.serverConfigs.get(server);
+    const oldName = config.name;
+    config.name = newName;
+    this.db.saveConfig(config)
+      .then(() => {
+        console.log(`Server name updated: ${oldName} -> ${newName}`);
+      })
+      .catch();
   }
 
   // TODO: 명령어 분기 함수화
