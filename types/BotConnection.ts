@@ -4,7 +4,6 @@ import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylist
 
 export class BotConnection {
   queue: SongQueue;
-  history: PlayHistory[] = [];
 
   joinedVoiceChannel: VoiceBasedChannel;
   subscription: PlayerSubscription;

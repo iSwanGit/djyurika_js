@@ -125,10 +125,21 @@ export class DJYurikaDB {
   }
 
   /**
-   * 최근 5개 재생항목 (not implemented)
+   * 최근 5(+1)개 재생항목
+   * 현재 재생중인 곡이 있을 수 있으므로 6개 추출
    * @param server 
    */
-  public async getPlayHistory(server: string) { }
+  public async getPlayHistory(server: string) {
+    try {
+      const conn = await this.pool.getConnection();
+      let idRows: Song[] = (await conn.query('SELECT id, title, url, source FROM playlist WHERE guild = ? ORDER BY lastplayedat DESC LIMIT 6', server));
+      conn.end();
+      return idRows;
+    }
+    catch (err) {
+      console.error(err);
+    }
+  }
 
   public async increasePlayCount(song: Song, server: string) {
     try {

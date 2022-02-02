@@ -999,19 +999,29 @@ export class DJYurika {
   }
 
   /**
-   * 최근 재생한 곡 (음성 채널에 연결한 동안, 최대 5곡으로 제한됨)
+   * 최근 재생한 곡 (중복 제외, 최대 5곡으로 제한됨)
    * @param message 
    * @param conn 
    */
-  private getHistory(message: Message | PartialMessage, conn: BotConnection) {
-    if (!conn.history?.length) {
+  private async getHistory(message: Message | PartialMessage, conn: BotConnection) {
+    const history = (await this.db.getPlayHistory(message.guild.id)) ?? [];
+
+    // exclude now playing
+    if (conn.queue?.songs[0]) {
+      history.shift();
+    }
+    else {
+      history.pop();
+    }
+
+    if (history.length === 0) {
       return message.channel.send('⚠ `최근 재생한 곡 없음`');
     }
   
     const guildName = message.guild.name;
     let queueData = '';
     
-    conn.history.forEach((item, index) => {
+    history.forEach((item, index) => {
       queueData += `-${index+1}. [${item.title}](${item.url})\n`;
     });
     
@@ -1022,7 +1032,7 @@ export class DJYurika {
         url: message.guild.me.user.avatarURL()
       })
       .setColor('#FFC0CB')
-      .addField('최근 5곡까지만 표시됩니다.', queueData, false);
+      .addField('최근 5곡까지만 표시됩니다. (반복 중복 제외)', queueData, false);
       // no title : \u200B
   
     return message.channel.send({ embeds: [embedMessage] });
@@ -1477,7 +1487,6 @@ export class DJYurika {
       conn.subscription.unsubscribe();
     }
     conn.queue.songs = [];
-    // conn.history = [];
     conn.joinedVoiceChannel = null;
     conn.subscription = null;
     conn.currentAudioResource = null;
@@ -1673,7 +1682,6 @@ export class DJYurika {
             console.info(`[${guild.name}] ` + `리스트 반복 설정 중`);
             // no break here, do shift
           case LoopType.NONE:
-            this.pushPlayHistory(conn.history, conn.queue.songs[0]);
             conn.queue.songs.shift();
             break;
         }
@@ -2626,7 +2634,6 @@ export class DJYurika {
       // console.log(oldState.status, newState.status);
     })
     .once(VoiceConnectionStatus.Destroyed, (oldState, newState) => {
-      this.pushPlayHistory(conn.history, conn.queue.songs[0]);
       this.onDisconnect(conn);
     });
 
