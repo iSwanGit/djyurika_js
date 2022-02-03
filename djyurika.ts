@@ -861,7 +861,7 @@ export class DJYurika {
   private skip(message: Message | PartialMessage, conn: BotConnection) {
     if (!conn.queue || conn.queue.songs.length === 0)
       return; // message.channel.send('There is no song that I could skip!');
-    
+
     // check sender is in voice channel (except moderator and developer)
     const voiceChannel = message.member.voice.channel;
     if (!(checkDeveloperRole(message.member.roles.cache, conn.config) || checkModeratorRole(message.member.roles.cache, conn.config))) {
@@ -1410,28 +1410,44 @@ export class DJYurika {
     }
   }
   
+  // 별로 의미가 없긴 한데
   private calculatePing(message: Message) {
-    const stamp1 = Date.now();
-    message.channel.send('🏓 `Calculating...`').then(msg => {
-      const stamp2 = Date.now();
+    // const stamp0 = Date.now();
 
-      const receive = stamp1 - message.createdTimestamp;
-      const response = msg.createdTimestamp - stamp1;
-      const trip = stamp2 - stamp1;
-      const total = msg.createdTimestamp - message.createdTimestamp;
-
-      msg.delete();
-      const pingMessage = `⏳ receive: \`${receive}ms\` \n`
-      + `⌛ response: \`${response}ms\` \n`
-      + `⏱ bot message trip: \`${trip}ms\` \n`
-      + `💓 ws ping: \`${this.client.ws.ping}ms\` \n`;
+    const voicePing = getVoiceConnection(message.guild.id)?.ping;
+    if (voicePing) {
+      const pingMessage = `⏳ udp: \`${voicePing.udp ?? '-'}ms\` \n`
+      + `⌛ ws: \`${voicePing.ws ?? '-'}ms\` \n`;
       const embedMessage = new MessageEmbed()
-        .setTitle('🏓 Ping via message')
+        .setTitle('🏓 Ping')
         .setDescription(pingMessage)
         .setColor('#ACF6CA');
+      
+      message.channel.send({ embeds: [embedMessage] });    
+    }
+    else {
+      const stamp1 = Date.now();
+      message.channel.send('🏓 `Calculating...`').then(msg => {
+        const stamp2 = Date.now();
   
-      message.channel.send({ embeds: [embedMessage] });
-    });
+        const receive = stamp1 - message.createdTimestamp;
+        const response = msg.createdTimestamp - stamp1;
+        const trip = stamp2 - stamp1;
+        // const total = msg.createdTimestamp - message.createdTimestamp;
+  
+        msg.delete();
+        const pingMessage = `⏳ receive: \`${receive}ms\` \n`
+        + `⌛ response: \`${response}ms\` \n`
+        + `⏱ bot message trip: \`${trip}ms\` \n`
+        + `💓 ws ping: \`${this.client.ws.ping}ms\` \n`;
+        const embedMessage = new MessageEmbed()
+          .setTitle('🏓 Ping via message')
+          .setDescription(pingMessage)
+          .setColor('#ACF6CA');
+    
+        message.channel.send({ embeds: [embedMessage] });
+      });
+    }    
   }
   
   private setLoop(message: Message | PartialMessage, conn: BotConnection, type: LoopType) {
