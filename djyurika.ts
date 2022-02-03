@@ -859,12 +859,17 @@ export class DJYurika {
   }
 
   private skip(message: Message | PartialMessage, conn: BotConnection) {
-    if (!message.member.voice.channel)
-      return message.channel.send(
-        'You have to be in a voice channel to stop the music!'
-      );
     if (!conn.queue || conn.queue.songs.length === 0)
       return; // message.channel.send('There is no song that I could skip!');
+    
+    // check sender is in voice channel (except moderator and developer)
+    const voiceChannel = message.member.voice.channel;
+    if (!(checkDeveloperRole(message.member.roles.cache, conn.config) || checkModeratorRole(message.member.roles.cache, conn.config))) {
+      if (!voiceChannel) {
+        message.reply('음성 채널에 들어와서 다시 요청해 주세요.');
+        return;
+      }
+    }
     
     // 큐 변경 중 shift 일어날 경우 undefined에러 발생, ?로 객체 존재여부 확인 추가
     conn.skipFlag = true;
