@@ -39,7 +39,7 @@ export class DJYurika {
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`~ping`: 지연시간 측정(메시지)\n';
+  '`~ping`: 지연시간 측정(음성/메시지)\n';
   private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
   '`~q`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
@@ -56,7 +56,8 @@ export class DJYurika {
   '`~d`: 재생목록에서 곡 삭제\n' + 
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`~ping`: 지연시간 측정(메시지)\n' +
+  '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
   private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
   '`~q`: 대기열 정보\n' +
@@ -75,10 +76,28 @@ export class DJYurika {
   '`~d`: 재생목록에서 곡 삭제\n' + 
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`~ping`: 지연시간 측정(메시지)\n' +
+  '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n' + 
   '`~cl`: 기본 설정값 로드\n' + 
   '`~cs`: 설정값 저장\n';
+
+  private readonly welcomeMessage = new MessageEmbed()
+  .setTitle('Hello world!')
+  .addFields(
+    {
+      name: '안녕하세요! DJ Yurika입니다.',
+      value: '현재 퍼블릭 오픈에 앞서 일부 서버에서 베타 운영중에 있습니다.\n' + 
+  '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 특정 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n' +
+  '`/register <new_channel>` 을 통해 채널 등록 후 이용하세요 :D',
+    },
+    {
+      name: '만든 사람 및 리포지토리',
+      value: `Discord: <@${environment.developerID}> \n` +
+      `GitHub: [djyurika_js](${environment.githubRepoUrl})\n` +
+      `Support: ${environment.supportServer}`
+    },
+  );
 
   private readonly defaultConfig: Config;
   private readonly serverConfigs: Map<string, Config>;
@@ -161,17 +180,36 @@ export class DJYurika {
     console.log(`${environment.overrideConfigs.length} configs overrided`);
   }
 
-  private async refreshSlashCommand() {
+  private createConfig(guild: Guild) {
+    const cfg = this.generateDefaultConfig(guild);
+    this.db.saveConfig(cfg)
+      .then(() => console.log(`[${guild.name}] New config saved`))
+      .catch((err) => console.error(`[${guild.name}] New config save failed`));
+    this.serverConfigs.set(guild.id, cfg);
+    return cfg;
+  }
+
+  private generateDefaultConfig(guild: Guild) {
+    const config = {
+      ...environment.defaultConfig,
+      server: guild.id,
+      name: guild.name,
+      commandChannelID: null, // guild.systemChannel.id,
+      moderatorRoleID: null,
+      developerRoleID: null,
+    } as Config;
+
+    return config;
+  }
+
+  private async refreshAllSlashCommand() {
     const guilds = this.client.guilds.cache;
 
     console.log('Start refreshing application (/) commands...');
     
     for (const [id, guild] of guilds) {
       try {
-        await this.rest.put(
-          Routes.applicationGuildCommands(keys.clientId, id),
-          { body: commands }
-        );
+        await this.refreshSlashCommand(guild);
       }
       catch (err) {
         console.error(`[${guild.name}] ${err}`);
@@ -181,15 +219,37 @@ export class DJYurika {
     console.log('refresh end');
   }
 
+  private async refreshSlashCommand(guild: Guild) {
+    return this.rest.put(
+      Routes.applicationGuildCommands(keys.clientId, guild.id),
+      { body: commands }
+    );
+  }
+
   private registerSlashCommandInteraction() {
     this.client.on('interactionCreate', async (interaction) => {
       if (!interaction.isCommand()) return;
+
+      // load config
+      const cfg = this.overrideConfigs.get(interaction.guild.id) ?? this.serverConfigs.get(interaction.guild.id) ?? this.createConfig(interaction.guild);
+
+      // load bot connection
+      let conn = this.connections.get(interaction.guild.id);
+      if (!conn) {
+        conn = new BotConnection();
+        conn.config = cfg;
+        this.connections.set(interaction.guild.id, conn);
+      }
     
       const { commandName } = interaction;
 
       switch (commandName) {
         case 'help':
-          await this.sendHelp(interaction);
+          this.sendHelp(interaction, conn);
+          break;
+
+        case 'register':
+          await this.registerCommandChannelBySlash(interaction, conn);
           break;
         
         case 'queue':
@@ -201,15 +261,15 @@ export class DJYurika {
 
   private registerConnectionHandler() {
     this.client.once('ready', async () => {
-      this.refreshSlashCommand();
+      this.refreshAllSlashCommand();
       this.refreshAllServerName();
-      this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
+      this.client.user.setActivity('Help: /help', { type: 'PLAYING' })
       setInterval(() => {
-        this.client.user.setActivity('Help: ~h', { type: 'PLAYING' })
+        this.client.user.setActivity('Help: /help', { type: 'PLAYING' })
       }, 3600000);
       console.log('Ready!');
     });
-    this.client.once('reconnecting', () => {
+    this.client.on('reconnecting', () => {
       console.log('Reconnecting!');
     });
     this.client.once('disconnect', () => {
@@ -226,11 +286,41 @@ export class DJYurika {
         this.refreshServerName(newGuild.id, newGuild.name);
       }
     });
+
+    this.client.on('guildDelete', (guild) => {
+      console.log('guild delete:', guild.name);
+    })
   }
 
   private registerGuildJoinHandler() {
-    this.client.on('guildCreate', guild => {
+    this.client.on('guildCreate', async guild => {
       console.log('guild add');
+
+      try {
+        await this.refreshSlashCommand(guild);
+      }
+      catch (err) {
+        console.error(`[${guild.name}] Slash command register failed: ${err.message}`);
+      }
+
+      let cfg = this.overrideConfigs.get(guild.id) ?? this.serverConfigs.get(guild.id);
+      if (cfg) {
+        console.log('Already have guild config');
+        this.refreshServerName(guild.id, guild.name);
+        return;
+      }
+
+      cfg = this.createConfig(guild);
+
+      // TODO: Welcome Message
+      try {
+        guild.systemChannel.send({ embeds: [this.welcomeMessage] })
+          .catch((err) => console.error('Welcome message send failed:', err.message));
+      }
+      catch (err) {
+        console.error(err.message);
+      }
+
       // 서버 추가시 안내할것
       // 명령어채널 및 역할 등록 유도
     });
@@ -239,7 +329,7 @@ export class DJYurika {
   private registerMessageHandler() {
     this.client.on('messageCreate', async (message) => {
       // load config
-      const cfg = this.overrideConfigs.get(message.guild.id) ?? this.serverConfigs.get(message.guild.id);
+      const cfg = this.overrideConfigs.get(message.guild.id) ?? this.serverConfigs.get(message.guild.id) ?? this.createConfig(message.guild);
       
       // load bot connection
       let conn = this.connections.get(message.guild.id);
@@ -259,7 +349,7 @@ export class DJYurika {
       // need help?
       const cmd = message.content.split(' ')[0].replace(`${environment.prefix}`, '');
       if (cmd === 'h') {
-        this.sendHelp(message);
+        this.sendHelp(message, conn);
         return;
       }
     
@@ -317,6 +407,11 @@ export class DJYurika {
               message.channel.send(`🎵 id: \`${conn.queue.songs[0]?.id}\``)
             }
           }
+          break;
+
+        case 'register':
+          // command channel
+          this.registerCommandChannelByText(message, conn);
           break;
 
         case 'shuffle':
@@ -760,16 +855,16 @@ export class DJYurika {
 
   }
 
-  private sendHelp(sourceObj: Message | CommandInteraction) {
+  private sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {
     const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
 
-    const opt = this.overrideConfigs.get(sourceObj.guildId) ?? this.serverConfigs.get(sourceObj.guildId);
+    const config = conn.config;
     const cmdName = '명령어';
     let cmdValue: string;
-    if (checkDeveloperRole(roles, opt)) {
+    if (checkDeveloperRole(roles, config)) {
       cmdValue = this.helpCmdDev;
     }
-    else if (checkModeratorRole(roles, opt)) {
+    else if (checkModeratorRole(roles, config)) {
       cmdValue = this.helpCmdMod;
     }
     else {
@@ -789,8 +884,90 @@ export class DJYurika {
           value: cmdValue,
         },
       );
+
+    const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
+    
+    // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
+    // 현재 null일 때 채널등록 유도
+    sourceObj.reply({ embeds });
+  }
+
+  /**
+   * 명령어 채널 등록 (via text message ~register)
+   * @param message 
+   * @param conn 
+   */
+  private registerCommandChannelByText(message: Message | PartialMessage, conn: BotConnection) {
+    const args = message.content.split(' ');
+    
+    try {
+      if (args.length !== 2) {
+        return message.reply('`~register <channel_id>`');
+      }
   
-      return sourceObj.reply({ embeds: [embedMessage] });
+      const newChannelID = args[1];
+      if (!message.guild.channels.cache.has(newChannelID)) {
+        return message.reply(`<#${newChannelID}> - 유효한 채널 ID가 아닙니다.`);
+      }
+  
+      const currentConfig = { ...conn.config } as Config;
+      const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
+  
+      this.db.saveConfig(newConfig)
+        .then(() => {
+          console.log(`[${message.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+          message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+        })
+        .catch((err) => {
+          message.channel.send('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+        });
+            
+      this.serverConfigs.set(message.guild.id, newConfig);
+      conn.config = newConfig;
+  
+    }
+    catch (err) {
+      console.error('Maybe permission denied', err.message);
+    }   
+  }
+
+  /**
+   * 명령어 채널 등록 (via slash command /register)
+   * @param interaction 
+   * @param conn 
+   */
+   private async registerCommandChannelBySlash(interaction: CommandInteraction, conn: BotConnection) {
+    
+    try {
+      // if (args.length !== 2) {
+      //   return message.reply('`~register <channel_id>`');
+      // }
+  
+      const newChannelID = interaction.options.getString('channel_id');
+      if (!interaction.guild.channels.cache.has(newChannelID)) {
+        await interaction.reply(`<#${newChannelID}> - 유효한 채널 ID가 아닙니다.`);
+        return;
+      }
+  
+      const currentConfig = { ...conn.config } as Config;
+      const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
+  
+      this.db.saveConfig(newConfig)
+        .then(async () => {
+          console.log(`[${interaction.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+          await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+        })
+        .catch(async (err) => {
+          await interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+        });
+      
+      this.serverConfigs.set(interaction.guild.id, newConfig);
+      conn.config = newConfig;
+  
+    }
+    catch (err) {
+      console.error('Maybe permission denied', err.message);
+    }
   }
 
   private async execute(message: Message | PartialMessage, conn: BotConnection) {

@@ -5,7 +5,9 @@ export const environment = {
   defaultConfig: {
     volume: 35,
   },
-  githubRepoUrl: 'https://github.com/MikuWallets/djyurika_js',
+  developerID: '368764722717392917',
+  githubRepoUrl: 'https://github.com/iSwanGit/djyurika_js',
+  supportServer: 'https://discord.com/invite/GwS2JJGnXh',
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
   youtubeUrlPrefix: 'https://www.youtube.com/watch?v=',
   maxSearchResults: 3,
