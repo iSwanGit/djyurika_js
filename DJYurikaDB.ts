@@ -60,13 +60,13 @@ export class DJYurikaDB {
       if (exist) {
         // update each attribute of DBConfig
         conn.query('UPDATE config SET name = ?, volume = ?, command_channel = ?, developer_role = ?, moderator_role = ? WHERE server = ?',
-        [config.name, config.volume, config.commandChannelID, config.developerRoleID, config.moderatorRoleID, config.server])
+        [config.name, config.volume, config.commandChannelID ?? null, config.developerRoleID ?? null, config.moderatorRoleID ?? null, config.server])
         .then(() => conn.end());
       }
       else {
         // create
         conn.query('INSERT INTO config (server, name, volume, command_channel, developer_role, moderator_role) VALUES (?, ?, ?, ?, ?, ?)',
-        [config.server, config.name, config.volume, config.commandChannelID, config.developerRoleID, config.moderatorRoleID])
+        [config.server, config.name, config.volume, config.commandChannelID ?? null, config.developerRoleID ?? null, config.moderatorRoleID ?? null])
         .then(() => conn.end());
       }
     }
