@@ -880,6 +880,10 @@ export class DJYurika {
       .setColor('#ffff00')
       .addFields(
         {
+          name: '명령 입력 채널',
+          value: config?.commandChannelID ? `<#${config.commandChannelID}>` : '없음 (`/register`로 등록 필요)'
+        },
+        {
           name: cmdName,
           value: cmdValue,
         },
