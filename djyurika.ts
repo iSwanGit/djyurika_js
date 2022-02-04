@@ -33,7 +33,8 @@ export class DJYurika {
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
-  '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~pause`: 곡 일시정지\n' + 
+  '`~resume`: 일시정지 해제\n' + 
   '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
@@ -46,7 +47,8 @@ export class DJYurika {
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
-  '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~pause`: 곡 일시정지\n' + 
+  '`~resume`: 일시정지 해제\n' + 
   '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
@@ -64,7 +66,8 @@ export class DJYurika {
   '`~r`: 현재 곡 재시작\n' +
   '`~l`: 채널에서 봇 퇴장\n' + 
   '`~shuffle`: 대기열 뒤섞기\n' + 
-  '`~pause`: 곡 일시정지 / 재개\n' + 
+  '`~pause`: 곡 일시정지\n' + 
+  '`~resume`: 일시정지 해제\n' + 
   '`~history`: 최근 재생한 곡\n' + 
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
@@ -322,7 +325,11 @@ export class DJYurika {
           break;
         
         case 'pause':
-          this.pauseAndResume(message, conn);
+          this.pause(message, conn);
+          break;
+
+        case 'resume':
+          this.resume(message, conn);
           break;
 
         case 'history':
@@ -996,11 +1003,11 @@ export class DJYurika {
   }
 
   /**
-   * 일시정지 및 재개
+   * 일시정지
    * @param message 
    * @param conn 
    */
-  private pauseAndResume(message: Message | PartialMessage, conn: BotConnection) {
+  private pause(message: Message | PartialMessage, conn: BotConnection) {
     const player = conn.subscription.player;
     if (!player) {
       return message.channel.send('⚠ `재생 중이 아님`');
@@ -1011,6 +1018,21 @@ export class DJYurika {
         player.pause();
         message.channel.send(`⏸ \`일시 정지\``);
         break;
+    }
+  }
+
+  /**
+   * 재개
+   * @param message 
+   * @param conn 
+   */
+  private resume(message: Message | PartialMessage, conn: BotConnection) {
+    const player = conn.subscription.player;
+    if (!player) {
+      return message.channel.send('⚠ `재생 중이 아님`');
+    }
+
+    switch (player.state.status) {
       case AudioPlayerStatus.Paused:
         player.unpause();
         message.channel.send(`▶ \`재생\``);
@@ -2629,6 +2651,7 @@ export class DJYurika {
   }
 
   /**
+   * @deprecated
    * 최근 플레이 리스트에 추가
    * @param history 
    * @param song 
