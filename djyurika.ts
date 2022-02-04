@@ -999,7 +999,7 @@ export class DJYurika {
     const newQueue = conn.queue.songs.slice(1).sort(() => Math.random() - 0.5);
     conn.queue.songs = [currentSong, ...newQueue];
 
-    message.channel.send('🔀 `대기열 섞기 완료`');
+    message.channel.send(`🔀 \`대기열 ${newQueue.length}곡 섞기 완료\``);
   }
 
   /**
