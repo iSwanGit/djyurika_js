@@ -2591,7 +2591,7 @@ export class DJYurika {
         },
         {
           name:   '대기열 (첫번째 곡)',
-          value:  (conn.queue.songs.length - playlist.estimatedItemCount).toString(),
+          value:  (conn.queue.songs.length - playlist.estimatedItemCount + 1).toString(),
           inline: true,
         },
       ] as EmbedFieldData[]);
@@ -2755,7 +2755,7 @@ export class DJYurika {
         },
         {
           name:   '대기열 (첫번째 곡)',
-          value:  (conn.queue.songs.length - playlist.track_count).toString(),
+          value:  (conn.queue.songs.length - playlist.track_count + 1).toString(),
           inline: true,
         },
       ] as EmbedFieldData[]);
