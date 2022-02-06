@@ -303,14 +303,21 @@ export class DJYurika {
         console.error(`[${guild.name}] Slash command register failed: ${err.message}`);
       }
 
-      let cfg = this.overrideConfigs.get(guild.id) ?? this.serverConfigs.get(guild.id);
-      if (cfg) {
+      // skip overrided 
+      if (this.overrideConfigs.has(guild.id)) {
+        console.log('Overrided config exists, skip config update');
+        return;
+      }
+
+      // update config if exists
+      if (this.serverConfigs.has(guild.id)) {
         console.log('Already have guild config');
         this.refreshServerName(guild.id, guild.name);
         return;
       }
 
-      cfg = this.createConfig(guild);
+      // create new config
+      this.createConfig(guild);
 
       // TODO: Welcome Message
       try {
@@ -855,7 +862,17 @@ export class DJYurika {
 
   }
 
-  private sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {
+  private async sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {
+    // if (sourceObj.type === 'APPLICATION_COMMAND') {
+    //   await (sourceObj as CommandInteraction).deferReply();
+    // }
+
+    // if (sourceObj.type === 'APPLICATION_COMMAND' && sourceObj.channelId === '845513507176710197') {
+    //   // await new Promise(resolve => setTimeout(resolve, 3000));
+    //   await (sourceObj as CommandInteraction).reply({ content: 'NOPE', ephemeral: true });
+    //   return;
+    // }
+    
     const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
 
     const config = conn.config;
@@ -893,7 +910,13 @@ export class DJYurika {
     
     // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
     // 현재 null일 때 채널등록 유도
-    sourceObj.reply({ embeds });
+    
+    // if (sourceObj.type === 'APPLICATION_COMMAND') {
+    //   (sourceObj as CommandInteraction).editReply({ embeds });
+    // }
+    // else {
+      sourceObj.reply({ embeds });
+    // }
   }
 
   /**
@@ -916,19 +939,26 @@ export class DJYurika {
   
       const currentConfig = { ...conn.config } as Config;
       const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
-  
-      this.db.saveConfig(newConfig)
-        .then(() => {
-          console.log(`[${message.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-          message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
-        })
-        .catch((err) => {
-          message.channel.send('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
-        });
-            
-      this.serverConfigs.set(message.guild.id, newConfig);
+      
       conn.config = newConfig;
-  
+
+      if (this.overrideConfigs.has(message.guild.id)) {
+        this.overrideConfigs.set(message.guild.id, newConfig);
+        console.log(`[${message.guild.name} (overrided)]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+        message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+      }
+      else {
+        this.serverConfigs.set(message.guild.id, newConfig);
+        this.db.saveConfig(newConfig)
+          .then(() => {
+            console.log(`[${message.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+            message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+          })
+          .catch((err) => {
+            message.channel.send('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+          });
+      }
+      
     }
     catch (err) {
       console.error('Maybe permission denied', err.message);
@@ -955,19 +985,25 @@ export class DJYurika {
   
       const currentConfig = { ...conn.config } as Config;
       const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
-  
-      this.db.saveConfig(newConfig)
-        .then(async () => {
-          console.log(`[${interaction.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-          await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
-        })
-        .catch(async (err) => {
-          await interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
-        });
       
-      this.serverConfigs.set(interaction.guild.id, newConfig);
       conn.config = newConfig;
-  
+
+      if (this.overrideConfigs.has(interaction.guild.id)) {
+        this.overrideConfigs.set(interaction.guild.id, newConfig);
+        console.log(`[${interaction.guild.name} (overrided)]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+        interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+      }
+      else {
+        this.serverConfigs.set(interaction.guild.id, newConfig);
+        this.db.saveConfig(newConfig)
+          .then(() => {
+            console.log(`[${interaction.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+            interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+          })
+          .catch((err) => {
+            interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+          });
+      }
     }
     catch (err) {
       console.error('Maybe permission denied', err.message);
