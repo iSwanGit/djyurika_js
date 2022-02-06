@@ -2230,6 +2230,7 @@ export class DJYurika {
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
       message.channel.send("```cs\n"+
       "# 검색결과가 없습니다.\n"+
+      `${errMsg}\n` +
       "```");
       return;
     }
@@ -2264,6 +2265,7 @@ export class DJYurika {
       message.channel.messages.fetch(msgId).then(msg => msg.delete());
       message.channel.send("```cs\n"+
       "# 검색결과가 없습니다.\n"+
+      `${errMsg}\n` +
       "```");
       return;
     }
