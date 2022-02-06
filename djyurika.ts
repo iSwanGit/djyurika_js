@@ -304,13 +304,6 @@ export class DJYurika {
     this.client.on('guildCreate', async guild => {
       console.log('guild add');
 
-      try {
-        await this.refreshSlashCommand(guild);
-      }
-      catch (err) {
-        console.error(`[${guild.name}] Slash command register failed: ${err.message}`);
-      }
-
       // skip overrided 
       if (this.overrideConfigs.has(guild.id)) {
         console.log('Overrided config exists, skip config update');
