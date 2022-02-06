@@ -8,6 +8,7 @@ export const environment = {
   developerID: '368764722717392917',
   githubRepoUrl: 'https://github.com/iSwanGit/djyurika_js',
   supportServer: 'https://discord.com/invite/GwS2JJGnXh',
+  supportServerID: '938391207535599646',
   searchApiUrl: 'https://www.googleapis.com/youtube/v3/search',
   youtubeUrlPrefix: 'https://www.youtube.com/watch?v=',
   maxSearchResults: 3,

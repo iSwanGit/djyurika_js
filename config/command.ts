@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from '@discordjs/builders'
 
-export const commands = [
+export const defaultCommands = [
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show command list and description'),
@@ -11,4 +11,11 @@ export const commands = [
       .setName('channel_id')
       .setRequired(true)
       .setDescription('Register text command channel')),
+].map(command => command.toJSON());
+
+export const supportGuildCommands = [
+  new SlashCommandBuilder()
+    .setName('uptime')
+    .setDescription('Show servers now playing (for admin)')
+    .setDefaultPermission(false)
 ].map(command => command.toJSON());

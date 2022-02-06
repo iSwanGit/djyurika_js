@@ -12,7 +12,7 @@ import scdl from 'soundcloud-downloader';
 import { SetInfo, TrackInfo } from 'soundcloud-downloader/src/info';
 import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
-import { commands, environment, keys } from './config';
+import { defaultCommands, environment, keys, supportGuildCommands } from './config';
 import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, parseYoutubeTimeParam, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
@@ -207,23 +207,31 @@ export class DJYurika {
 
     console.log('Start refreshing application (/) commands...');
     
-    for (const [id, guild] of guilds) {
-      try {
-        await this.refreshSlashCommand(guild);
-      }
-      catch (err) {
-        console.error(`[${guild.name}] ${err}`);
-      }
+    try {
+      await this.refreshSlashCommand();
+      await this.refreshMyGuildCommand();
+    }
+    catch (err) {
+      console.error(`${err}`);
     }
     
     console.log('refresh end');
   }
 
-  private async refreshSlashCommand(guild: Guild) {
+  private async refreshSlashCommand() {
     return this.rest.put(
-      Routes.applicationGuildCommands(keys.clientId, guild.id),
-      { body: commands }
+      Routes.applicationCommands(keys.clientId),
+      { body: defaultCommands }
     );
+  }
+
+  private async refreshMyGuildCommand() {
+    return this.rest.put(
+      Routes.applicationGuildCommands(keys.clientId, environment.supportServerID),
+      { body: supportGuildCommands }
+    );
+
+    // TODO: Activate permission
   }
 
   private registerSlashCommandInteraction() {
