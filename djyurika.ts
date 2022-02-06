@@ -41,8 +41,8 @@ export class DJYurika {
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`/invite`: 봇 초대 링크 전송' + 
-  '`/support`: 봇 지원(서포트) 정보 안내' +
+  '`/invite`: 봇 초대 링크 전송\n' + 
+  '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
   private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
   '`~q`: 대기열 정보\n' +
@@ -61,8 +61,8 @@ export class DJYurika {
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
   '`~register` `/register`: 명령어 채널 등록(변경)\n' +
-  '`/invite`: 봇 초대 링크 전송' + 
-  '`/support`: 봇 지원(서포트) 정보 안내' +
+  '`/invite`: 봇 초대 링크 전송\n' + 
+  '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
   private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
@@ -83,8 +83,8 @@ export class DJYurika {
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
   '`~register` `/register`: 명령어 채널 등록(변경)\n' +
-  '`/invite`: 봇 초대 링크 전송' + 
-  '`/support`: 봇 지원(서포트) 정보 안내' +
+  '`/invite`: 봇 초대 링크 전송\n' + 
+  '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n' + 
   '`~cl`: 기본 설정값 로드\n' + 
