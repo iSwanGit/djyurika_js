@@ -39,6 +39,8 @@ export class DJYurika {
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
+  '`/invite`: 봇 초대 링크 전송' + 
+  '`/support`: 봇 지원(서포트) 정보 안내' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
   private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
   '`~q`: 대기열 정보\n' +
@@ -57,6 +59,8 @@ export class DJYurika {
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
   '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`/invite`: 봇 초대 링크 전송' + 
+  '`/support`: 봇 지원(서포트) 정보 안내' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
   private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
@@ -77,6 +81,8 @@ export class DJYurika {
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
   '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`/invite`: 봇 초대 링크 전송' + 
+  '`/support`: 봇 지원(서포트) 정보 안내' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n' + 
   '`~cl`: 기본 설정값 로드\n' + 
@@ -95,7 +101,7 @@ export class DJYurika {
       name: '만든 사람 및 리포지토리',
       value: `Discord: <@${environment.developerID}> \n` +
       `GitHub: [djyurika_js](${environment.githubRepoUrl})\n` +
-      `Support: ${environment.supportServer}`
+      `Support: ${environment.supportServerUrl}`
     },
   );
 
@@ -258,6 +264,14 @@ export class DJYurika {
 
         case 'register':
           await this.registerCommandChannelBySlash(interaction, conn);
+          break;
+
+        case 'invite':
+          await this.sendInviteLink(interaction);
+          break;
+
+        case 'support':
+          await this.sendSupportServerLink(interaction);
           break;
         
         case 'queue':
@@ -861,6 +875,41 @@ export class DJYurika {
   // TODO: 명령어 분기 함수화
   private commandSwitchHandler(cmd: string) {
 
+  }
+
+  private async sendInviteLink(interaction: CommandInteraction) {
+    const embedMessage = new MessageEmbed()
+    .setAuthor({
+      name: '저를 서버에 초대해 보세요!',
+      iconURL: interaction.guild.me.user.avatarURL(),
+      url: environment.supportServerUrl,
+    })
+    .setColor('#ffff00')
+    .setDescription(`[**CLICK HERE!**](${environment.inviteUrl})`);
+
+    interaction.reply({ embeds: [embedMessage] });
+  }
+
+  private async sendSupportServerLink(interaction: CommandInteraction) {
+    const embedMessage = new MessageEmbed()
+    .setAuthor({
+      name: '지원이 필요하신가요?',
+      iconURL: interaction.guild.me.user.avatarURL(),
+      url: environment.supportServerUrl,
+    })
+    .setColor('#ffff00')
+    .addFields(
+      {
+        name: '지원 서버 (Discord)',
+        value: `[DJ Yurika](${environment.supportServerUrl})`,
+      },
+      {
+        name: 'GitHub 리포지토리',
+        value: `[djyurika_js](${environment.githubRepoUrl})`,
+      },
+    );
+
+    interaction.reply({ embeds: [embedMessage] });
   }
 
   private async sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {

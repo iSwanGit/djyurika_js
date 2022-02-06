@@ -11,6 +11,12 @@ export const defaultCommands = [
       .setName('channel_id')
       .setRequired(true)
       .setDescription('Register text command channel')),
+  new SlashCommandBuilder()
+    .setName('invite')
+    .setDescription('Serve a link for inviting me'),
+  new SlashCommandBuilder()
+    .setName('support')
+    .setDescription('Show infos for support'),
 ].map(command => command.toJSON());
 
 export const supportGuildCommands = [
