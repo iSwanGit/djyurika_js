@@ -226,6 +226,19 @@ export class DJYurika {
     console.log('refresh end');
   }
 
+  // 개발/ㅇ디버그용
+  private async clearGuildCommand() {
+    for (const [id, guild] of this.client.guilds.cache) {
+      try {
+      await this.rest.put(
+        Routes.applicationGuildCommands(keys.clientId, id),
+        { body: {} },
+      );
+      }
+      catch(_){}
+    }
+  }
+
   private async refreshSlashCommand() {
     return this.rest.put(
       Routes.applicationCommands(keys.clientId),
@@ -950,7 +963,7 @@ export class DJYurika {
       .addFields(
         {
           name: '명령 입력 채널',
-          value: `${config?.commandChannelID ? `<#${config.commandChannelID}>` : '없음 (`/register`로 등록 필요)'}\n` +
+          value: `${config?.commandChannelID ? `<#${config.commandChannelID}>` : '없음 (`/register`로 등록 필요)'}\n\n` +
           '현재 퍼블릭 오픈에 앞서 일부 서버에서 베타 운영중에 있습니다.\n' + 
           '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 특정 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n',
         },
@@ -959,7 +972,7 @@ export class DJYurika {
           value: cmdValue,
         },
       )
-      .setFooter(`Version: v${pkgJson.version}`);
+      .setFooter({ text: `Version: v${pkgJson.version}` });
 
     const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
     
