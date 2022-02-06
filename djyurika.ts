@@ -14,7 +14,7 @@ import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
 import { commands, environment, keys } from './config';
 import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
-import { checkDeveloperRole, checkModeratorRole, fillZeroPad, getYoutubeSearchList } from './util';
+import { checkDeveloperRole, checkModeratorRole, fillZeroPad, parseYoutubeTimeParam, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
 
 export class DJYurika {
@@ -1139,7 +1139,7 @@ export class DJYurika {
       if (!queueData[Math.trunc(index / 5)]) {
         queueData[Math.trunc(index / 5)] = '';
       }
-      queueData[Math.trunc(index / 5)] += `${index+1}. [${song?.title}](${song?.url})\n`;
+      queueData[Math.trunc(index / 5)] += `${index+1}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
     });
     await Promise.all(promise);
     if (length > 50) {
@@ -1883,7 +1883,7 @@ export class DJYurika {
 
       switch (song.source) {
         case SongSource.YOUTUBE:
-          const stream = await playDl.stream(song.url);  // my soundcloud client_id expired...
+          const stream = await playDl.stream(song.url, { seek: song.startOffset });  // my soundcloud client_id expired...
           conn.currentAudioResource = createAudioResource(stream.stream, { inputType: stream.type, inlineVolume: true });
           break;
         
@@ -1908,6 +1908,9 @@ export class DJYurika {
         // 일시정지 재개  -> paused, playing
         // 재생 시작 -> buffering, playing
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+        
+        // set start offset
+        conn.playTimeCounter = song.startOffset * 1000;
         // time counter start
         if (oldState.status === AudioPlayerStatus.Buffering) {
           conn.playTimeCounterHandler = setInterval(() => {
@@ -1975,9 +1978,9 @@ export class DJYurika {
       this.db.fillEmptySongInfo(song);
   
       conn.songStartTimestamp = Date.now();
-      console.log(`[${guild.name}] ` + `재생: ${song.title}`);
+      console.log(`[${guild.name}] ` + `재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}`);
       // client.user.setActivity(song.title, { type: 'LISTENING' });
-      conn.queue.textChannel.send(`🎶 \`재생: ${song.title}\``);
+      conn.queue.textChannel.send(`🎶 \`재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}\``);
     }
     catch (err: any) {
       console.error(err);
@@ -2181,6 +2184,7 @@ export class DJYurika {
       return;
     }
   
+    // const startPoint = getPlayStartPoint(url);
     // Make song instance
     const song = new Song(
       songInfo.id.toString(),
@@ -2191,6 +2195,7 @@ export class DJYurika {
       Math.round(songInfo.full_duration / 1000),
       user.id,
       SongSource.SOUNDCLOUD,
+      // startPoint,
       );
     console.log(`검색된 SoundCloud 영상: ${song.title} (${song.id}) (${song.duration}초)`);
   
@@ -2212,7 +2217,8 @@ export class DJYurika {
       "```");
       return;
     }
-  
+
+    const startPoint = parseYoutubeTimeParam(url);
     // Make song instance
     const song = new Song(
       songInfo.videoDetails.videoId,
@@ -2223,6 +2229,7 @@ export class DJYurika {
       parseInt(songInfo.videoDetails.lengthSeconds),
       user.id,
       SongSource.YOUTUBE,
+      startPoint,
       );
     console.log(`검색된 YouTube 영상: ${song.title} (${song.id}) (${song.duration}초)`);
   
@@ -2291,7 +2298,7 @@ export class DJYurika {
         url: song.url
       })
       .setColor('#0000ff')
-      .setDescription(`[${song.title}](${song.url})`)
+      .setDescription(`[${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}`)
       .setThumbnail(song.thumbnail)
       .addFields([
         {
@@ -2942,7 +2949,7 @@ export class DJYurika {
         url: song.url
       })
       .setColor('#0000ff')
-      .setDescription(`[${song.title}](${song.url})`)
+      .setDescription(`[${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}`)
       .setThumbnail(song.thumbnail)
       .addFields(
         {

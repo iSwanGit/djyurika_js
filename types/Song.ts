@@ -9,6 +9,7 @@ export class Song {
   duration: number;
   requestUserId: string;
   source: SongSource;
+  startOffset: number;
 
   constructor(
     id?: string,
@@ -19,6 +20,7 @@ export class Song {
     duration?: number,
     requestUserId?: string,
     source?: SongSource,
+    startOffset?: number,
     ) {
       this.id = id;
       this.title = title;
@@ -28,6 +30,7 @@ export class Song {
       this.duration = duration;
       this.requestUserId = requestUserId;
       this.source = source;
+      this.startOffset = startOffset ?? 0;
     }
 
   get durationH() {
