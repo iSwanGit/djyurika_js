@@ -16,6 +16,7 @@ export const environment = {
   refreshInterval: 13000,
   timeCounterTickInterval: 100,
   maxQueueTextRows: 50,
+  queueGroupRowSize: 5, // 약수로 입력하기
 
   // for debug
   overrideConfigs: [

@@ -113,6 +113,7 @@ export class DJYurika {
   private readonly connections: Map<string, BotConnection>;
   private readonly interval: number;
   private readonly maxQueueTextRowSize: number;
+  private readonly queueGroupRowSize: number;
   
   constructor() {
     this.db = new DJYurikaDB();
@@ -131,8 +132,9 @@ export class DJYurika {
     this.serverConfigs = new Map<string, Config>();
     this.overrideConfigs = new Map<string, Config>();
     this.connections = new Map<string, BotConnection>();
-    this.interval = environment.refreshInterval;
-    this.maxQueueTextRowSize = environment.maxQueueTextRows;
+    this.interval = environment.refreshInterval ?? 13000;
+    this.maxQueueTextRowSize = environment.maxQueueTextRows ?? 50;
+    this.queueGroupRowSize = environment.queueGroupRowSize ?? 5;
 
     // playDl.setToken({
     //   soundcloud: {
@@ -199,7 +201,7 @@ export class DJYurika {
 
   private generateDefaultConfig(guild: Guild) {
     const config = {
-      ...environment.defaultConfig,
+      ...this.defaultConfig,
       server: guild.id,
       name: guild.name,
       commandChannelID: null, // guild.systemChannel.id,
@@ -211,8 +213,6 @@ export class DJYurika {
   }
 
   private async refreshAllSlashCommand() {
-    const guilds = this.client.guilds.cache;
-
     console.log('Start refreshing application (/) commands...');
     
     try {
@@ -226,7 +226,7 @@ export class DJYurika {
     console.log('refresh end');
   }
 
-  // 개발/ㅇ디버그용
+  // 개발/디버그용
   private async clearGuildCommand() {
     for (const [id, guild] of this.client.guilds.cache) {
       try {
@@ -1204,14 +1204,14 @@ export class DJYurika {
     // slice maximum 50(env value)
     const length = conn.queue.songs.length - 1;
     const promise = conn.queue.songs.slice(1, this.maxQueueTextRowSize+1).map((song, index) => {
-      if (!queueData[Math.trunc(index / 5)]) {
-        queueData[Math.trunc(index / 5)] = '';
+      if (!queueData[Math.trunc(index / this.queueGroupRowSize)]) {
+        queueData[Math.trunc(index / this.queueGroupRowSize)] = '';
       }
-      queueData[Math.trunc(index / 5)] += `${index+1}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
+      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+1}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
     });
     await Promise.all(promise);
-    if (length > 50) {
-      queueData[5] = `and ${length - this.maxQueueTextRowSize} more song(s)`;
+    if (length > this.maxQueueTextRowSize) {
+      queueData[Math.trunc(this.maxQueueTextRowSize / this.queueGroupRowSize)] = `and ${length - this.maxQueueTextRowSize} more song(s)`;
     }
   
     let loopStr = '';
@@ -2652,6 +2652,7 @@ export class DJYurika {
         message.channel.messages.fetch(msgId).then(msg => msg.delete());
       }
     } else {
+      const currentQueueLength = conn.queue.songs.length;
       await this.addSongListToPlaylist(songs, conn);
   
       // 최초 부른 사용자가 나가면 채워넣기
@@ -2704,7 +2705,7 @@ export class DJYurika {
         },
         {
           name:   '대기열 (첫번째 곡)',
-          value:  (conn.queue.songs.length - playlist.estimatedItemCount + 1).toString(),
+          value:  currentQueueLength.toString(),  // 현재곡 및 index 보정 어차피 해야하므로 +1 -1 생략
           inline: true,
         },
       ] as EmbedFieldData[]);
@@ -2816,6 +2817,7 @@ export class DJYurika {
         message.channel.messages.fetch(msgId).then(msg => msg.delete());
       }
     } else {
+      const currentQueueLength = conn.queue.songs.length;
       await this.addSongListToPlaylist(songs, conn);
   
       // 최초 부른 사용자가 나가면 채워넣기
@@ -2868,7 +2870,7 @@ export class DJYurika {
         },
         {
           name:   '대기열 (첫번째 곡)',
-          value:  (conn.queue.songs.length - playlist.track_count + 1).toString(),
+          value:  currentQueueLength.toString(),  // 현재곡 및 index 보정 어차피 해야하므로 +1 -1 생략
           inline: true,
         },
       ] as EmbedFieldData[]);
