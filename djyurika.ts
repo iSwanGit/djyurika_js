@@ -1951,7 +1951,8 @@ export class DJYurika {
 
       switch (song.source) {
         case SongSource.YOUTUBE:
-          const stream = await playDl.stream(song.url, { seek: song.startOffset });  // my soundcloud client_id expired...
+          // my soundcloud client_id expired...
+          const stream = await playDl.stream(song.url, { seek: song.startOffset ?? 0 });
           conn.currentAudioResource = createAudioResource(stream.stream, { inputType: stream.type, inlineVolume: true });
           break;
         
