@@ -23,7 +23,7 @@
     "mariadb": "^2.5.3",
     "node-opus": "^0.3.3",
     "opusscript": "^0.0.8",
-    "play-dl": "^1.8.6",
+    "play-dl": "^1.8.7",
     "request": "^2.88.2",
     "request-promise-native": "^1.0.9",
     "soundcloud-downloader": "^1.0.0",
