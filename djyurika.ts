@@ -1059,17 +1059,17 @@ export class DJYurika {
       if (this.overrideConfigs.has(interaction.guild.id)) {
         this.overrideConfigs.set(interaction.guild.id, newConfig);
         console.log(`[${interaction.guild.name} (overrided)]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-        interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+        await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
       }
       else {
         this.serverConfigs.set(interaction.guild.id, newConfig);
         this.db.saveConfig(newConfig)
-          .then(() => {
+          .then(async () => {
             console.log(`[${interaction.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-            interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+            await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
           })
-          .catch((err) => {
-            interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+          .catch(async (err) => {
+            await interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
           });
       }
     }
