@@ -264,9 +264,9 @@ export class DJYurika {
     
     // not recommended: cached every 1 hour : slow
     // await this.clearApplicationCommand();
-    await this.clearGuildCommand()
-    .then(() => Promise.all([this.refreshGuildCommand(), this.refreshMyGuildCommand()]))
-    .catch(err => console.error(`${err}`));
+    // await this.clearGuildCommand()
+    // .then(() => Promise.all([this.refreshGuildCommand(), this.refreshMyGuildCommand()]))
+    await this.refreshGuildCommand().catch(err => console.error(`${err}`));
     
     console.log('refresh end');
   }
@@ -303,7 +303,11 @@ export class DJYurika {
   private async registerGuildCommand(guild: Guild) {
     return this.rest.put(
       Routes.applicationGuildCommands(keys.clientId, guild.id),
-      { body: defaultCommands }
+      {
+        body: guild.id === environment.supportServerID
+          ? [ ...defaultCommands, ...supportGuildCommands ]
+          : defaultCommands
+      }
     );
   }
 
