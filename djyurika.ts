@@ -1075,9 +1075,9 @@ export class DJYurika {
         return;
       }
       
-      // 
-      const channel = interaction.guild.channels.cache.get(newChannelID);
-      if (!interaction.guild.me.permissionsIn(channel).has(this.textChannelPermissions)) {
+      // check permission
+      const newChannel = interaction.guild.channels.cache.get(newChannelID);
+      if (!interaction.guild.me.permissionsIn(newChannel).has(this.textChannelPermissions)) {
         await interaction.reply({
           content: `<#${newChannelID}> - 권한이 부족합니다.`,
           ephemeral: true,
@@ -1097,15 +1097,23 @@ export class DJYurika {
       }
       else {
         this.serverConfigs.set(interaction.guild.id, newConfig);
-        this.db.saveConfig(newConfig)
-          .then(async () => {
-            console.log(`[${interaction.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-            await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
-          })
-          .catch(async (err) => {
-            await interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
-          });
+        try {
+          await this.db.saveConfig(newConfig);
+          console.log(`[${interaction.guild.name}] Command channel: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
+          await interaction.reply(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
+        }
+        catch (err) {
+          await interaction.reply('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
+        }
       }
+
+      // update channel info in queue object
+      // 최초 재생을 시작한 채널로 유지하고 싶다면 본 코드를 주석처리할 것
+      // 단, 현재 구현으로는 추후 명령어 채널 제한 옵션을 끈 상태에서는 꼬일 수 있음...
+      if (conn.queue?.textChannel) {
+        conn.queue.textChannel = newChannel as TextChannel;
+      }
+
     }
     catch (err) {
       console.error('Maybe permission denied', err.message);
