@@ -139,8 +139,8 @@ export class DJYurika {
     {
       name: '안녕하세요! DJ Yurika입니다.',
       value: '현재 퍼블릭 오픈에 앞서 일부 서버에서 베타 운영중에 있습니다.\n' + 
-  '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 특정 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n' +
-  '`/register <new_channel>` 을 통해 채널 등록 후 이용하세요 :D',
+  '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 지정한 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n' +
+  '`/channel` 을 통해 채널 등록 후 이용하세요 :D',
     },
     {
       name: '만든 사람 및 리포지토리',
@@ -1021,9 +1021,9 @@ export class DJYurika {
       .addFields(
         {
           name: '명령 입력 채널',
-          value: `${config?.commandChannelID ? `<#${config.commandChannelID}>` : '없음 (`/register`로 등록 필요)'}\n\n` +
+          value: `${config?.commandChannelID ? `<#${config.commandChannelID}>` : '없음 (`/channel`로 등록 필요)'}\n\n` +
           '현재 퍼블릭 오픈에 앞서 일부 서버에서 베타 운영중에 있습니다.\n' + 
-          '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 특정 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n',
+          '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 지정한 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n',
         },
         {
           name: cmdName,
