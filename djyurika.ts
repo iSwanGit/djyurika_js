@@ -1312,7 +1312,7 @@ export class DJYurika {
     return message.channel.send({ embeds: [embedMessage] });
   }
   
-  private stop(message: Message | PartialMessage, delMsgId: string, conn: BotConnection) {
+  private async stop(message: Message | PartialMessage, delMsgId: string, conn: BotConnection) {
     const voiceState = message.guild.me.voice;
     // onDisconnect callback will do clear queue
     if (voiceState !== undefined) {
@@ -1320,9 +1320,9 @@ export class DJYurika {
         // conn.subscription.unsubscribe();
         getVoiceConnection(message.guild.id).destroy();
         if (delMsgId) {
-          message.channel.messages.fetch(delMsgId).then(msg => msg.delete());
+          message?.channel.messages.fetch(delMsgId).then(msg => msg.delete());
         }
-        return message.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
+        await message?.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
       }
       catch (err) {
         console.error(err);
@@ -1987,8 +1987,8 @@ export class DJYurika {
       }
     }
     catch (err) {
-      // console.log(err);
-      conn.queue.textChannel.send(`⚠ Error: ${err.message}.`);
+      console.error(`Random pick error: ${err.message}`);
+      conn.queue.textChannel.send(`⚠ Error: ${err.message}.`).catch();
       getVoiceConnection(guild.id).destroy();
       // throw err;
       return;
@@ -2062,13 +2062,19 @@ export class DJYurika {
           console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
           (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
             `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
-          );
+          ).catch(err => console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`));
         }
 
         // if bot is alone and queue is empty, then stop
         if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
-          const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-          this.stop(message, null, conn);
+          try {
+            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+            this.stop(message, null, conn);
+          }
+          catch (err) {
+            console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+            this.stop(null, null, conn);
+          }
           return;
         }
 
@@ -2095,11 +2101,11 @@ export class DJYurika {
       
       })
       .on("error", error => {
+        console.error(error);
         conn.queue.textChannel.send('```cs\n'+
         '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
         `Error: ${error.message}`+
-        '```');
-        console.error(error);
+        '```').catch(err => console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`));
       });
 
       this.db.increasePlayCount(song, guild.id);
@@ -2108,7 +2114,15 @@ export class DJYurika {
       conn.songStartTimestamp = Date.now();
       console.log(`[${guild.name}] ` + `재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}`);
       // client.user.setActivity(song.title, { type: 'LISTENING' });
-      conn.queue.textChannel.send(`🎶 \`재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}\``);
+      
+      try {
+        await conn.queue.textChannel.send(`🎶 \`재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}\``)
+      }
+      catch (err) {
+        if (err.code === 50001 || err.httpStatus === 403) {
+          console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+        }
+      }
     }
     catch (err: any) {
       console.error(err);
