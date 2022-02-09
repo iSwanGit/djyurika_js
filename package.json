@@ -1,9 +1,10 @@
 {
   "name": "djyurika-js",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "description": "DJ Yurika JavaScript ver.",
   "main": "app.ts",
   "scripts": {
+    "start": "tsc && node build/app.js",
     "test": "ts-node",
     "build": "tsc"
   },
