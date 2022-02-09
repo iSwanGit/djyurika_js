@@ -1,10 +1,37 @@
 import * as pkgJson from './package.json';
 
-import { Client, Collection, CommandInteraction, DMChannel, EmbedFieldData, Guild, GuildMember, GuildMemberRoleManager, Intents, InteractionType, Message, MessageEmbed, MessageReaction, NewsChannel, PartialDMChannel, PartialMessage, Role, TextChannel, ThreadChannel, User, VoiceBasedChannel } from 'discord.js';
-import { joinVoiceChannel, getVoiceConnection, DiscordGatewayAdapterCreator, VoiceConnectionStatus, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import {
+  Client,
+  CommandInteraction,
+  DMChannel,
+  EmbedFieldData,
+  Guild,
+  GuildMember,
+  GuildMemberRoleManager,
+  Intents,
+  Message,
+  MessageEmbed,
+  MessageReaction,
+  NewsChannel,
+  PartialDMChannel,
+  PartialMessage,
+  PermissionString,
+  TextChannel,
+  ThreadChannel,
+  User,
+  VoiceBasedChannel,
+} from 'discord.js';
+import {
+  joinVoiceChannel,
+  getVoiceConnection,
+  DiscordGatewayAdapterCreator,
+  VoiceConnectionStatus,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+} from '@discordjs/voice';
 import { REST } from '@discordjs/rest';
 import { Routes } from 'discord-api-types/v9';
-import { SlashCommandBuilder } from '@discordjs/builders';
 
 import playDl from 'play-dl';
 import ytdl from 'ytdl-core-discord';
@@ -15,7 +42,22 @@ import { SetInfo, TrackInfo } from 'soundcloud-downloader/src/info';
 import { SearchResponseAll } from 'soundcloud-downloader/src/search';
 
 import { defaultCommands, environment, keys, supportGuildCommands } from './config';
-import { AddPlaylistConfirmList, BotConnection, Config, LeaveRequest, LoopType, MoveRequest, PlayHistory, SearchError, SearchResult, Song, SongQueue, SongSource, UpdatedVoiceState, YoutubeSearch } from './types';
+import {
+  AddPlaylistConfirmList,
+  BotConnection,
+  Config,
+  LeaveRequest,
+  LoopType,
+  MoveRequest,
+  PlayHistory,
+  SearchError,
+  SearchResult,
+  Song,
+  SongQueue,
+  SongSource,
+  UpdatedVoiceState,
+  YoutubeSearch,
+} from './types';
 import { checkDeveloperRole, checkModeratorRole, fillZeroPad, parseYoutubeTimeParam, getYoutubeSearchList } from './util';
 import { DJYurikaDB } from './DJYurikaDB';
 
@@ -41,6 +83,7 @@ export class DJYurika {
   '`~loop`: 현재 곡 반복/해제\n' + 
   '`~loopq`: 현재 재생목록 반복/해제\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
+  '`/channel`: 명령어 채널 등록(변경)\n' +
   '`/invite`: 봇 초대 링크 전송\n' + 
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
@@ -60,7 +103,7 @@ export class DJYurika {
   '`~d`: 재생목록에서 곡 삭제\n' + 
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`/channel`: 명령어 채널 등록(변경)\n' +
   '`/invite`: 봇 초대 링크 전송\n' + 
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
@@ -82,7 +125,7 @@ export class DJYurika {
   '`~d`: 재생목록에서 곡 삭제\n' + 
   '`~c`: 재생목록 비우기\n' + 
   '`~move`: 음성 채널 이동 요청\n' +
-  '`~register` `/register`: 명령어 채널 등록(변경)\n' +
+  '`/channel`: 명령어 채널 등록(변경)\n' +
   '`/invite`: 봇 초대 링크 전송\n' + 
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
@@ -114,6 +157,8 @@ export class DJYurika {
   private readonly interval: number;
   private readonly maxQueueTextRowSize: number;
   private readonly queueGroupRowSize: number;
+  private readonly textChannelPermissions: PermissionString[];
+  private readonly voiceChannelPermissions: PermissionString[];
   
   constructor() {
     this.db = new DJYurikaDB();
@@ -135,6 +180,8 @@ export class DJYurika {
     this.interval = environment.refreshInterval ?? 13000;
     this.maxQueueTextRowSize = environment.maxQueueTextRows ?? 50;
     this.queueGroupRowSize = environment.queueGroupRowSize ?? 5;
+    this.textChannelPermissions = environment.textChannelPermissionStrings ?? [];
+    this.voiceChannelPermissions = environment.voiceChannelPermissionStrings ?? [];
 
     // playDl.setToken({
     //   soundcloud: {
@@ -216,6 +263,10 @@ export class DJYurika {
     console.log('Start refreshing application (/) commands...');
     
     try {
+      // force update: caching...
+      await this.clearApplicationCommand();
+      await this.clearGuildCommand();
+
       await this.refreshSlashCommand();
       await this.refreshMyGuildCommand();
     }
@@ -232,6 +283,18 @@ export class DJYurika {
       try {
       await this.rest.put(
         Routes.applicationGuildCommands(keys.clientId, id),
+        { body: {} },
+      );
+      }
+      catch(_){}
+    }
+  }
+
+  private async clearApplicationCommand() {
+    for (const [id, guild] of this.client.guilds.cache) {
+      try {
+      await this.rest.put(
+        Routes.applicationCommands(keys.clientId),
         { body: {} },
       );
       }
@@ -274,10 +337,10 @@ export class DJYurika {
 
       switch (commandName) {
         case 'help':
-          this.sendHelp(interaction, conn);
+          await this.sendHelp(interaction, conn);
           break;
 
-        case 'register':
+        case 'channel':
           await this.registerCommandChannelBySlash(interaction, conn);
           break;
 
@@ -444,11 +507,6 @@ export class DJYurika {
               message.channel.send(`🎵 id: \`${conn.queue.songs[0]?.id}\``)
             }
           }
-          break;
-
-        case 'register':
-          // command channel
-          this.registerCommandChannelByText(message, conn);
           break;
 
         case 'shuffle':
@@ -988,66 +1046,42 @@ export class DJYurika {
   }
 
   /**
-   * 명령어 채널 등록 (via text message ~register)
-   * @param message 
-   * @param conn 
-   */
-  private registerCommandChannelByText(message: Message | PartialMessage, conn: BotConnection) {
-    const args = message.content.split(' ');
-    
-    try {
-      if (args.length !== 2) {
-        return message.reply('`~register <channel_id>`');
-      }
-  
-      const newChannelID = args[1];
-      if (!message.guild.channels.cache.has(newChannelID)) {
-        return message.reply(`<#${newChannelID}> - 유효한 채널 ID가 아닙니다.`);
-      }
-  
-      const currentConfig = { ...conn.config } as Config;
-      const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
-      
-      conn.config = newConfig;
-
-      if (this.overrideConfigs.has(message.guild.id)) {
-        this.overrideConfigs.set(message.guild.id, newConfig);
-        console.log(`[${message.guild.name} (overrided)]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-        message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
-      }
-      else {
-        this.serverConfigs.set(message.guild.id, newConfig);
-        this.db.saveConfig(newConfig)
-          .then(() => {
-            console.log(`[${message.guild.name}]: ${currentConfig.commandChannelID} -> ${newConfig.commandChannelID}`);
-            message.channel.send(`이제부터 <#${newChannelID}> 에서 명령을 받을게요.`);
-          })
-          .catch((err) => {
-            message.channel.send('⚠ \`Update failed (에러 지속 발생시 봇 운영자에게 문의 바랍니다 ㅜㅜ!)\`');
-          });
-      }
-      
-    }
-    catch (err) {
-      console.error('Maybe permission denied', err.message);
-    }   
-  }
-
-  /**
    * 명령어 채널 등록 (via slash command /register)
    * @param interaction 
    * @param conn 
    */
    private async registerCommandChannelBySlash(interaction: CommandInteraction, conn: BotConnection) {
-    
     try {
-      // if (args.length !== 2) {
-      //   return message.reply('`~register <channel_id>`');
-      // }
-  
-      const newChannelID = interaction.options.getString('channel_id');
+      let newChannelID: string;
+      const subCommand = interaction.options.getSubcommand();
+      switch (subCommand) {
+        case 'id':
+          newChannelID = interaction.options.getString('id');
+          break;
+        case 'select':
+          newChannelID = interaction.options.getChannel('channel')?.id ?? interaction.channel.id;
+          break;
+        default:
+          await interaction.reply({ content: 'Wrong command', ephemeral: true });
+          return;
+      }
+
+      // valid channel id?
       if (!interaction.guild.channels.cache.has(newChannelID)) {
-        await interaction.reply(`<#${newChannelID}> - 유효한 채널 ID가 아닙니다.`);
+        await interaction.reply({
+          content: `<#${newChannelID}> - 유효한 채널 ID가 아닙니다.`,
+          ephemeral: true,
+        });
+        return;
+      }
+      
+      // 
+      const channel = interaction.guild.channels.cache.get(newChannelID);
+      if (!interaction.guild.me.permissionsIn(channel).has(this.textChannelPermissions)) {
+        await interaction.reply({
+          content: `<#${newChannelID}> - 권한이 부족합니다.`,
+          ephemeral: true,
+        });
         return;
       }
   
@@ -1075,6 +1109,7 @@ export class DJYurika {
     }
     catch (err) {
       console.error('Maybe permission denied', err.message);
+      await interaction.reply({ content: `Error: ${err.message}`, ephemeral: true });
     }
   }
 

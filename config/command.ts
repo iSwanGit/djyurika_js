@@ -1,16 +1,32 @@
 import { SlashCommandBuilder } from '@discordjs/builders'
+import { ChannelType } from 'discord-api-types';
 
 export const defaultCommands = [
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show command list and description'),
   new SlashCommandBuilder()
-    .setName('register')
-    .setDescription('Show command list and description')
-    .addStringOption(option => option
-      .setName('channel_id')
-      .setRequired(true)
-      .setDescription('Register text command channel')),
+    .setName('channel')
+    .setDescription('Register text command channel')
+    .addSubcommand(command => command
+      .setName('id')
+      .setDescription('Select command channel using ID')
+      .addStringOption(option => option
+        .setName('id')
+        .setRequired(true)
+        .setDescription('Channel ID')
+      )
+    )
+    .addSubcommand(command => command
+      .setName('select')
+      .setDescription('Select command channel from channel list')
+      .addChannelOption(option => option
+        .addChannelType(ChannelType.GuildText)
+          .setName('channel')
+          .setRequired(false)
+          .setDescription('Channel select')
+      )
+    ),
   new SlashCommandBuilder()
     .setName('invite')
     .setDescription('Serve a link for inviting me'),
