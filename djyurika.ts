@@ -1090,6 +1090,16 @@ export class DJYurika {
         });
         return;
       }
+      try {
+        await (newChannel as TextChannel).send('test').then(msg => msg.delete());
+      }
+      catch (err) {
+        await interaction.reply({
+          content: `<#${newChannelID}> - 메시지 전송 테스트에 실패했습니다. 혹시 비공개 채널인가요?`,
+          ephemeral: true,
+        });
+        return;
+      }
   
       const currentConfig = { ...conn.config } as Config;
       const newConfig = { ...conn.config, commandChannelID: newChannelID } as Config;
