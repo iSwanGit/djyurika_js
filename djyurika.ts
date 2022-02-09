@@ -262,54 +262,53 @@ export class DJYurika {
   private async refreshAllSlashCommand() {
     console.log('Start refreshing application (/) commands...');
     
-    try {
-      // force update: caching...
-      await this.clearApplicationCommand();
-      await this.clearGuildCommand();
-
-      await this.refreshSlashCommand();
-      await this.refreshMyGuildCommand();
-    }
-    catch (err) {
-      console.error(`${err}`);
-    }
+    // not recommended: cached every 1 hour : slow
+    // await this.clearApplicationCommand();
+    await this.clearGuildCommand()
+    .then(() => Promise.all([this.refreshGuildCommand(), this.refreshMyGuildCommand()]))
+    .catch(err => console.error(`${err}`));
     
     console.log('refresh end');
   }
 
   // 개발/디버그용
   private async clearGuildCommand() {
+    console.log('Clear guild commands...');
     for (const [id, guild] of this.client.guilds.cache) {
-      try {
-      await this.rest.put(
+      this.rest.put(
         Routes.applicationGuildCommands(keys.clientId, id),
         { body: {} },
-      );
-      }
-      catch(_){}
+      )
+      .catch(err => console.error(`${err}`));
     }
   }
 
+  // NOT RECOMMENDED (in docs)
   private async clearApplicationCommand() {
-    for (const [id, guild] of this.client.guilds.cache) {
-      try {
-      await this.rest.put(
-        Routes.applicationCommands(keys.clientId),
-        { body: {} },
-      );
-      }
-      catch(_){}
-    }
-  }
-
-  private async refreshSlashCommand() {
+    console.log('Clear global commands...');
     return this.rest.put(
       Routes.applicationCommands(keys.clientId),
+      { body: {} },
+    );
+  }
+
+  private async refreshGuildCommand() {
+    console.log('Register guild commands...');
+    for (const [id, guild] of this.client.guilds.cache) {
+      this.registerGuildCommand(guild)
+      .catch(err => console.error(`${err}`));
+    }
+  }
+
+  private async registerGuildCommand(guild: Guild) {
+    return this.rest.put(
+      Routes.applicationGuildCommands(keys.clientId, guild.id),
       { body: defaultCommands }
     );
   }
 
   private async refreshMyGuildCommand() {
+    console.log('Register support server commands...');
     return this.rest.put(
       Routes.applicationGuildCommands(keys.clientId, environment.supportServerID),
       { body: supportGuildCommands }
@@ -395,6 +394,13 @@ export class DJYurika {
   private registerGuildJoinHandler() {
     this.client.on('guildCreate', async guild => {
       console.log('guild add');
+
+      try {
+        await this.registerGuildCommand(guild);
+      }
+      catch (err) {
+        console.error(`[${guild.name}] Slash command register failed: ${err.message}`);
+      }
 
       // skip overrided 
       if (this.overrideConfigs.has(guild.id)) {
