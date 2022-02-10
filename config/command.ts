@@ -3,6 +3,9 @@ import { ChannelType } from 'discord-api-types';
 
 export const defaultCommands = [
   new SlashCommandBuilder()
+    .setName('about')
+    .setDescription('Hello world!'),
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show command list and description'),
   new SlashCommandBuilder()
@@ -30,6 +33,9 @@ export const defaultCommands = [
   new SlashCommandBuilder()
     .setName('invite')
     .setDescription('Serve a link for inviting me'),
+  new SlashCommandBuilder()
+    .setName('status')
+    .setDescription('Show bot usage status'),
   new SlashCommandBuilder()
     .setName('support')
     .setDescription('Show infos for support'),

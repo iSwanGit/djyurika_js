@@ -140,15 +140,22 @@ export class DJYurika {
       name: '안녕하세요! DJ Yurika입니다.',
       value: '현재 퍼블릭 오픈에 앞서 일부 서버에서 베타 운영중에 있습니다.\n' + 
   '슬래시(`/`) 커맨드를 제외한 텍스트(`~`) 커맨드는 지정한 채널에서만 작동하도록 설계되어 있으며, 이는 개선 예정에 있습니다.\n' +
-  '`/channel` 을 통해 채널 등록 후 이용하세요 :D',
+  '`/channel` 을 통해 채널 등록 후 이용해 주세요 :D',
     },
     {
       name: '만든 사람 및 리포지토리',
       value: `Discord: <@${environment.developerID}> \n` +
       `GitHub: [djyurika_js](${environment.githubRepoUrl})\n` +
-      `Support: ${environment.supportServerUrl}`
+      `Support: ${environment.supportServerUrl}`,
+      inline: true,
     },
-  );
+    {
+      name: '사용 방법 (How to use)',
+      value: '`/help`',
+      inline: true,
+    },
+  )
+  .setFooter({ text: `Version: v${pkgJson.version}` });
 
   private readonly defaultConfig: Config;
   private readonly serverConfigs: Map<string, Config>;
@@ -339,6 +346,10 @@ export class DJYurika {
       const { commandName } = interaction;
 
       switch (commandName) {
+        case 'about':
+          await this.sendWelcomeMessage(interaction, conn);
+          break;
+
         case 'help':
           await this.sendHelp(interaction, conn);
           break;
@@ -349,6 +360,10 @@ export class DJYurika {
 
         case 'invite':
           await this.sendInviteLink(interaction);
+          break;
+
+        case 'status':
+          await this.sendBotStatus(interaction);
           break;
 
         case 'support':
@@ -970,7 +985,7 @@ export class DJYurika {
     .setColor('#ffff00')
     .setDescription(`[**CLICK HERE!**](${environment.inviteUrl})`);
 
-    interaction.reply({ embeds: [embedMessage] });
+    return interaction.reply({ embeds: [embedMessage] });
   }
 
   private async sendSupportServerLink(interaction: CommandInteraction) {
@@ -992,7 +1007,44 @@ export class DJYurika {
       },
     );
 
-    interaction.reply({ embeds: [embedMessage] });
+    await interaction.reply({ embeds: [embedMessage] });
+  }
+
+  private async sendBotStatus(interaction: CommandInteraction) {
+    let playServerCount = 0;
+    for (const conn of this.connections.values()) {
+      if (conn.subscription) playServerCount++;
+    }
+
+    const embedMessage = new MessageEmbed()
+    .setTitle('Bot Usage Status')
+    .setColor('#ffff00')
+    .addFields(
+      {
+        name: 'Servers',
+        value: this.client.guilds.cache.size.toString(),
+        inline: true,
+      },
+      {
+        name: 'Now Playing',
+        value: playServerCount.toString(),
+        inline: true,
+      },
+    )
+    .setFooter({ text: `Version: v${pkgJson.version}` });
+
+    await interaction.reply({ embeds: [embedMessage] });
+  }
+
+  private async sendWelcomeMessage(interaction: CommandInteraction, conn: BotConnection) {
+    await interaction.reply({ embeds: [
+      new MessageEmbed(this.welcomeMessage).addFields(
+        {
+          name: '명령 입력 채널',
+          value: `${conn.config?.commandChannelID ? `<#${conn.config.commandChannelID}>` : '없음 (`/channel`로 등록 필요)'}`,
+        },
+      )
+    ] });
   }
 
   private async sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {
@@ -1042,17 +1094,19 @@ export class DJYurika {
       )
       .setFooter({ text: `Version: v${pkgJson.version}` });
 
-    const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
+    if (sourceObj.type === 'APPLICATION_COMMAND') {
+      await sourceObj.reply({ embeds: [embedMessage] });
+      if (config?.commandChannelID === null) {
+        await (sourceObj as CommandInteraction).followUp({ embeds: [this.welcomeMessage] });
+      }
+    }
+    else {
+      const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
+      await sourceObj.reply({ embeds });
+    }
     
     // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
     // 현재 null일 때 채널등록 유도
-    
-    // if (sourceObj.type === 'APPLICATION_COMMAND') {
-    //   (sourceObj as CommandInteraction).editReply({ embeds });
-    // }
-    // else {
-      sourceObj.reply({ embeds });
-    // }
   }
 
   /**
