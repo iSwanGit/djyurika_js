@@ -2281,7 +2281,7 @@ export class DJYurika {
   }
   
   private async getYoutubePlaylistInfo(url: string) {
-    return await ytpl(url);
+    return await ytpl(url, { limit: Infinity });
   }
   
   private async getYoutubeVideoInfo(url: string) {
