@@ -36,6 +36,7 @@ export class DJYurikaDB {
       const config = (await conn.query(`SELECT server, name, volume, command_channel as commandChannelID, developer_role as developerRoleID, moderator_role as moderatorRoleID FROM config WHERE server = ?`, server))[0] as Config;
       
       conn.end();
+      conn.release();
       return config;
     }
     catch (err) { console.error(err); throw err; }
@@ -47,6 +48,7 @@ export class DJYurikaDB {
       const configs = (await conn.query(`SELECT server, name, volume, command_channel as commandChannelID, developer_role as developerRoleID, moderator_role as moderatorRoleID FROM config`)) as Config[];
       
       conn.end();
+      conn.release();
       return configs;
     }
     catch (err) { console.error(err); throw err; }
@@ -61,13 +63,13 @@ export class DJYurikaDB {
         // update each attribute of DBConfig
         conn.query('UPDATE config SET name = ?, volume = ?, command_channel = ?, developer_role = ?, moderator_role = ? WHERE server = ?',
         [config.name, config.volume, config.commandChannelID ?? null, config.developerRoleID ?? null, config.moderatorRoleID ?? null, config.server])
-        .then(() => conn.end());
+        .then(() => { conn.end(); conn.release(); });
       }
       else {
         // create
         conn.query('INSERT INTO config (server, name, volume, command_channel, developer_role, moderator_role) VALUES (?, ?, ?, ?, ?, ?)',
         [config.server, config.name, config.volume, config.commandChannelID ?? null, config.developerRoleID ?? null, config.moderatorRoleID ?? null])
-        .then(() => conn.end());
+        .then(() => { conn.end(); conn.release(); });
       }
     }
     catch (err) {
@@ -82,6 +84,7 @@ export class DJYurikaDB {
       const exist = (await conn.query(`SELECT COUNT(id) as exist FROM playlist WHERE id = ? AND source = ? AND guild = ?`, [song.id, song.source, server]))[0].exist;
       
       conn.end();
+      conn.release();
       // console.log(rows);
       if (exist) {  // already registered
         return true;
@@ -99,7 +102,7 @@ export class DJYurikaDB {
       conn.query('INSERT INTO playlist (id, title, createdat, source, url, guild) VALUES (?, ?, (SELECT NOW()), ?, ?, ?)', [song.id, song.title, song.source, song.url, server])
         .then(async () => await this.increasePickCount(song, server))
         .catch(err => console.error(err))
-        .finally(() => conn.end());
+        .finally(() => { conn.end(); conn.release(); });
     }
     catch (err) { console.error(err); }
   }
@@ -116,6 +119,7 @@ export class DJYurikaDB {
       // const res = idRows[getRandomInt(0, idRows.length)] as Song; 
       const song = new Song(res.id, null, res.url, null, null, null, null, res.source);
       conn.end();
+      conn.release();
       return song;
     }
     catch (err) {
@@ -134,6 +138,7 @@ export class DJYurikaDB {
       const conn = await this.pool.getConnection();
       let idRows: Song[] = (await conn.query('SELECT id, title, url, source FROM playlist WHERE guild = ? ORDER BY lastplayedat DESC LIMIT 6', server));
       conn.end();
+      conn.release();
       return idRows;
     }
     catch (err) {
@@ -147,7 +152,7 @@ export class DJYurikaDB {
 
       const count = (await conn.query('SELECT playcount FROM playlist WHERE id = ? AND source = ? AND guild = ?', [song.id, song.source, server]))[0].playcount;
       conn.query('UPDATE playlist SET playcount = ?, lastplayedat = (SELECT NOW()) WHERE id = ? AND source = ? AND guild = ?', [count+1, song.id, song.source, server])
-        .then(() => conn.end());
+        .then(() => { conn.end(); conn.release(); });
     }
     catch (err) { console.error(err); }
   }
@@ -158,7 +163,7 @@ export class DJYurikaDB {
 
       const count = (await conn.query('SELECT pickcount FROM playlist WHERE id = ? AND source = ? AND guild = ?', [song.id, song.source, server]))[0].pickcount;
       conn.query('UPDATE playlist SET pickcount = ? WHERE id = ? AND source = ? AND guild = ?', [count+1, song.id, song.source, server])
-        .then(() => conn.end());
+        .then(() => { conn.end(); conn.release(); });
     }
     catch (err) { console.error(err); }
   }
@@ -180,6 +185,7 @@ export class DJYurikaDB {
         console.log('Update permalink to DB column');
       }
       conn.end();
+      conn.release();
     }
     catch (err) { console.error(err); }
   }
