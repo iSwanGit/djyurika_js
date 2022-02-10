@@ -1902,8 +1902,9 @@ export class DJYurika {
     conn.skipFlag = false;
     // client.user.setActivity();
     clearInterval(conn.npMsgIntervalHandler);
-    conn.playTimeCounter = 0;
-    clearInterval(conn.playTimeCounterHandler);
+    conn.pauseTimeCounter = 0;
+    clearInterval(conn.pauseTimeCounterHandler);
+    conn.songStartOffset = 0; // just reset 
     conn.searchResultMsgs.clear();
     conn.moveRequestList.clear();
     conn.leaveRequestList.clear();
@@ -2027,45 +2028,41 @@ export class DJYurika {
       conn.currentAudioResource.volume.setVolumeLogarithmic(conn.config.volume / 100);
 
       // play
-      conn.playTimeCounter = 0;
+      conn.pauseTimeCounter = 0;
       subscription.player.play(conn.currentAudioResource);
 
       // register eventListener
       // newState 상태에 대한 이벤트임,
       // memo: 일시정지는 여러번 할 수 있지만, interval 관련은 한번 불려야 함. 그리고 무엇보다 곡 넘길때 재생한 곡수만큼 중복으로 불린다. once 필수
-      // subscription.player.once(AudioPlayerStatus.Paused, (oldState, newState) => {
-      //   console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
-      // });
+      subscription.player.once(AudioPlayerStatus.Paused, (oldState, newState) => {
+        console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+        // setInterval interval 돌기 전 한번 올려놔야함
+        conn.pauseTimeCounter = environment.timeCounterTickInterval;
+        // time counter start only if paused
+        conn.pauseTimeCounterHandler = setInterval(() => {
+          if (subscription.player.state.status === AudioPlayerStatus.Paused) {
+            conn.pauseTimeCounter += environment.timeCounterTickInterval;
+          }
+        }, environment.timeCounterTickInterval);
+      });
       subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
-        // 일시정지 재개  -> paused, playing
+        // 일시정지 재개  -> paused, playing (once로 호출해서 영향없음)
         // 재생 시작 -> buffering, playing
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
-        
-        // set start offset
-        conn.playTimeCounter = song.startOffset * 1000;
-        // time counter start
-        if (oldState.status === AudioPlayerStatus.Buffering) {
-          conn.playTimeCounterHandler = setInterval(() => {
-            if (subscription.player.state.status === AudioPlayerStatus.Playing) {
-              conn.playTimeCounter += environment.timeCounterTickInterval;
-            }
-          }, environment.timeCounterTickInterval);
-        }
       })
       .once(AudioPlayerStatus.Idle, async (oldState, newState) => {
         // 재생 끝: playing -> idle
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
         console.log(`[${guild.name}] ` + `재생 끝: ${song.title}`);
         
-        // const playedTime = Math.round((Date.now() - conn.songStartTimestamp)/1000);
         // 재생시각 카운터 멈추고 시간 구하기
-        clearInterval(conn.playTimeCounterHandler);
-        const playedTime = Math.round(conn.playTimeCounter / 1000);
+        clearInterval(conn.pauseTimeCounterHandler);
+        const playedTime = Math.round((Date.now() - conn.songStartTimestamp - conn.pauseTimeCounter)/1000);
 
-        if (song.duration > (playedTime + 3) && !conn.skipFlag) { // ignore at most 3sec
-          console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}/${song.duration}`);
+        if (song.duration > (playedTime + song.startOffset + 3) && !conn.skipFlag) { // ignore at most 3sec
+          console.warn(`[${guild.name}] ` + `Play finished unexpectedly: ${playedTime}${song.startOffset > 0 ? `(+${song.startOffset}s)` : ''}/${song.duration}`);
           (guild.channels.cache.get(conn.config.commandChannelID) as TextChannel).send(
-            `⚠ Stream finished unexpectedly: \`${playedTime}\` sec out of \`${song.duration}\` sec`
+            `⚠ Stream finished unexpectedly: \`${playedTime}${song.startOffset > 0 ? `(+${song.startOffset}s)` : ''}\` sec out of \`${song.duration}\` sec`
           ).catch(err => console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`));
         }
 
@@ -2116,6 +2113,8 @@ export class DJYurika {
       this.db.fillEmptySongInfo(song);
   
       conn.songStartTimestamp = Date.now();
+      conn.songStartOffset = song.startOffset * 1000; // set start offset
+
       console.log(`[${guild.name}] ` + `재생: ${song.title + (song.startOffset > 0 ? ` (+${song.startOffset}초부터 시작)` : '')}`);
       // client.user.setActivity(song.title, { type: 'LISTENING' });
       
@@ -3078,7 +3077,7 @@ export class DJYurika {
     if (!song) throw Error('song object not defined');  // prevent error
     // calculate current playtime. 1/3 scale
 
-    let playTime: number | string = conn.playTimeCounter / 1000;
+    let playTime: number | string = Math.round((Date.now() - conn.songStartTimestamp - conn.pauseTimeCounter)/1000);
     const currentPoint = Math.round(playTime / song.duration * 100 / 4);
     let playBar: string[] | string = Array(26).fill('▬');
     playBar[currentPoint] = '🔘';
