@@ -299,12 +299,18 @@ export class DJYurika {
   }
 
   private async refreshGuildCommand() {
-    await this.clearGuildCommand();
+    // await this.clearGuildCommand();
 
     console.log('Register guild commands...');
     for (const [id, guild] of this.client.guilds.cache) {
-      this.registerGuildCommand(guild)
-      .catch(err => console.error(`${err}`));
+      if (id === environment.supportServerID) {
+        this.registerSupportGuildCommand(guild)
+        .catch(err => console.error(`${err}`));      
+      }
+      else { 
+        this.registerGuildCommand(guild)
+        .catch(err => console.error(`${err}`));
+      }
     }
   }
 
@@ -319,22 +325,18 @@ export class DJYurika {
           //   : defaultCommands
         }
       );
-
-      if (guild.id === environment.supportServerID) {
-        await this.addSupportGuildCommand(guild);
-      }
     }
     catch (err) {
       console.error(`[${guild.name}] guild cmd registration error: ${err.message}`)
     }
   }
 
-  private async addSupportGuildCommand(guild: Guild) {
+  private async registerSupportGuildCommand(guild: Guild) {
     console.log('Register admin-only commands to support server...');
     try {
-      const commands = (await this.rest.put(
+      const res = (await this.rest.put(
         Routes.applicationGuildCommands(keys.clientId, environment.supportServerID),
-        { body: supportGuildCommands }
+        { body: [ ...defaultCommands, ...supportGuildCommands ] }
       )) as GuildCommandAPI[];
 
       const permissions = [
@@ -346,9 +348,11 @@ export class DJYurika {
       ] as ApplicationCommandPermissionData[];
       
       // Activate permission
+      const commands = await guild.commands.fetch();
+      // 같은 name 가지는 서브커맨드 이런거 일단 생각 안함
+      // commands.filter(cmd => supportGuildCommands.find(c => c.name === cmd.name))
       commands.forEach(async (cmd) => {
-        const command = await guild.commands.fetch(cmd.id);
-        command.permissions.add({ permissions });
+        await cmd.permissions.add({ permissions });
       });
       
     }
@@ -1094,7 +1098,7 @@ export class DJYurika {
 
   private async sendActiveServers(interaction: CommandInteraction) {
     type ActiveInfo = { name: string, queue: number, listener: number };
-    const playServers: any = [];
+    const playServers: any[] = [];
     for (const [serverId, conn] of this.connections) {
       if (conn.subscription) playServers.push({
         name: this.client.guilds.cache.get(serverId).name,
@@ -1107,9 +1111,16 @@ export class DJYurika {
       playServers.push('재생 중인 서버 없음');
     }
 
+    const infoText =
+      playServers.length === 0
+      ? '재생 중인 서버 없음'
+      : playServers
+      .map((s: ActiveInfo) => `${s.name} (${s.queue}s/${s.listener}p)`)
+      .reduce((prev, cur) => prev + '\n' + cur);
+
     const embedMessage = new MessageEmbed()
     .setTitle('Now Playing Servers')
-    .setDescription(playServers.reduce((prev: ActiveInfo, cur: ActiveInfo) => prev + `\n${cur.name} (${cur.queue}s/${cur.listener}p)`));
+    .setDescription(infoText);
 
     try {
       await interaction.reply({ embeds: [embedMessage], ephemeral: true });
