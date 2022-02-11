@@ -1,6 +1,7 @@
 import * as pkgJson from './package.json';
 
 import {
+  ApplicationCommandPermissionData,
   Client,
   CommandInteraction,
   DMChannel,
@@ -46,6 +47,7 @@ import {
   AddPlaylistConfirmList,
   BotConnection,
   Config,
+  GuildCommandAPI,
   LeaveRequest,
   LoopType,
   MoveRequest,
@@ -271,14 +273,11 @@ export class DJYurika {
     
     // not recommended: cached every 1 hour : slow
     // await this.clearApplicationCommand();
-    // await this.clearGuildCommand()
-    // .then(() => Promise.all([this.refreshGuildCommand(), this.refreshMyGuildCommand()]))
     await this.refreshGuildCommand().catch(err => console.error(`${err}`));
     
     console.log('refresh end');
   }
 
-  // 개발/디버그용
   private async clearGuildCommand() {
     console.log('Clear guild commands...');
     for (const [id, guild] of this.client.guilds.cache) {
@@ -300,6 +299,8 @@ export class DJYurika {
   }
 
   private async refreshGuildCommand() {
+    await this.clearGuildCommand();
+
     console.log('Register guild commands...');
     for (const [id, guild] of this.client.guilds.cache) {
       this.registerGuildCommand(guild)
@@ -308,18 +309,56 @@ export class DJYurika {
   }
 
   private async registerGuildCommand(guild: Guild) {
-    return this.rest.put(
-      Routes.applicationGuildCommands(keys.clientId, guild.id),
-      {
-        body: guild.id === environment.supportServerID
-          ? [ ...defaultCommands, ...supportGuildCommands ]
-          : defaultCommands
+    try {
+      await this.rest.put(
+        Routes.applicationGuildCommands(keys.clientId, guild.id),
+        {
+          body: defaultCommands
+          // body: guild.id === environment.supportServerID
+          //   ? [ ...defaultCommands, ...supportGuildCommands ]
+          //   : defaultCommands
+        }
+      );
+
+      if (guild.id === environment.supportServerID) {
+        await this.addSupportGuildCommand(guild);
       }
-    );
+    }
+    catch (err) {
+      console.error(`[${guild.name}] guild cmd registration error: ${err.message}`)
+    }
   }
 
-  private async refreshMyGuildCommand() {
-    console.log('Register support server commands...');
+  private async addSupportGuildCommand(guild: Guild) {
+    console.log('Register admin-only commands to support server...');
+    try {
+      const commands = (await this.rest.put(
+        Routes.applicationGuildCommands(keys.clientId, environment.supportServerID),
+        { body: supportGuildCommands }
+      )) as GuildCommandAPI[];
+
+      const permissions = [
+        {
+          id: environment.developerID,
+          type: 'USER',
+          permission: true,
+        },
+      ] as ApplicationCommandPermissionData[];
+      
+      // Activate permission
+      commands.forEach(async (cmd) => {
+        const command = await guild.commands.fetch(cmd.id);
+        command.permissions.add({ permissions });
+      });
+      
+    }
+    catch (err) {
+      console.error(`admin cmd reg/grant error: ${err}`);
+    }
+  }
+
+  private async grantMyCommandPermission() {
+    console.log('Set permission to admin-only command.');
     return this.rest.put(
       Routes.applicationGuildCommands(keys.clientId, environment.supportServerID),
       { body: supportGuildCommands }
@@ -372,6 +411,12 @@ export class DJYurika {
         
         case 'queue':
           await interaction.reply('Server info.');
+          break;
+
+        // admin
+
+        case 'dev_active':
+          await this.sendActiveServers(interaction);
           break;
       }
     });
@@ -1047,6 +1092,31 @@ export class DJYurika {
     ] });
   }
 
+  private async sendActiveServers(interaction: CommandInteraction) {
+    type ActiveInfo = { name: string, queue: number, listener: number };
+    const playServers: any = [];
+    for (const [serverId, conn] of this.connections) {
+      if (conn.subscription) playServers.push({
+        name: this.client.guilds.cache.get(serverId).name,
+        queue: conn.queue?.songs.length ?? 0,
+        listener: conn.joinedVoiceChannel ? conn.joinedVoiceChannel.members.size - 1 : 0,
+      });
+    }
+
+    if (playServers.length === 0) {
+      playServers.push('재생 중인 서버 없음');
+    }
+
+    const embedMessage = new MessageEmbed()
+    .setTitle('Now Playing Servers')
+    .setDescription(playServers.reduce((prev: ActiveInfo, cur: ActiveInfo) => prev + `\n${cur.name} (${cur.queue}s/${cur.listener}p)`));
+
+    try {
+      await interaction.reply({ embeds: [embedMessage], ephemeral: true });
+    }
+    catch (err) { console.error(err.message) }
+  }
+
   private async sendHelp(sourceObj: Message | CommandInteraction, conn: BotConnection) {
     // if (sourceObj.type === 'APPLICATION_COMMAND') {
     //   await (sourceObj as CommandInteraction).deferReply();
@@ -1119,9 +1189,9 @@ export class DJYurika {
       let newChannelID: string;
       const subCommand = interaction.options.getSubcommand();
       switch (subCommand) {
-        case 'id':
-          newChannelID = interaction.options.getString('id');
-          break;
+        case 'info':
+          await interaction.reply({ content: `현재 명령어 채널: ${conn.config?.commandChannelID ? `<#${conn.config.commandChannelID}>` : '없음 (`/channel`로 등록하세요!)'}` });
+          return;
         case 'select':
           newChannelID = interaction.options.getChannel('channel')?.id ?? interaction.channel.id;
           break;

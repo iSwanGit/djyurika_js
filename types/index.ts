@@ -12,3 +12,4 @@ export * from './AddPlaylistConfirmList';
 export * from './LoopType';
 export * from './SongSource';
 export * from './PlayHistory';
+export * from './GuildCommandAPI';
