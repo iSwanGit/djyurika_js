@@ -1107,10 +1107,6 @@ export class DJYurika {
       });
     }
 
-    if (playServers.length === 0) {
-      playServers.push('재생 중인 서버 없음');
-    }
-
     const infoText =
       playServers.length === 0
       ? '재생 중인 서버 없음'
