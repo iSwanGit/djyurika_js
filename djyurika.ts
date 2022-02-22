@@ -2164,17 +2164,20 @@ export class DJYurika {
 
       // register eventListener
       // newState 상태에 대한 이벤트임,
-      // memo: 일시정지는 여러번 할 수 있지만, interval 관련은 한번 불려야 함. 그리고 무엇보다 곡 넘길때 재생한 곡수만큼 중복으로 불린다. once 필수
-      subscription.player.once(AudioPlayerStatus.Paused, (oldState, newState) => {
+      // memo: 일시정지는 여러번 할 수 있지만, interval 관련은 한번 불려야 함.
+      subscription.player.on(AudioPlayerStatus.Paused, (oldState, newState) => {
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
-        // setInterval interval 돌기 전 한번 올려놔야함
-        conn.pauseTimeCounter = environment.timeCounterTickInterval;
-        // time counter start only if paused
-        conn.pauseTimeCounterHandler = setInterval(() => {
-          if (subscription.player.state.status === AudioPlayerStatus.Paused) {
-            conn.pauseTimeCounter += environment.timeCounterTickInterval;
-          }
-        }, environment.timeCounterTickInterval);
+
+        if (!conn.pauseTimeCounterHandler) {
+          // setInterval interval 돌기 전 한번 올려놔야함
+          conn.pauseTimeCounter = environment.timeCounterTickInterval;
+          // time counter start only if paused
+          conn.pauseTimeCounterHandler = setInterval(() => {
+            if (subscription.player.state.status === AudioPlayerStatus.Paused) {
+              conn.pauseTimeCounter += environment.timeCounterTickInterval;
+            }
+          }, environment.timeCounterTickInterval);
+        }
       });
       subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
         // 일시정지 재개  -> paused, playing (once로 호출해서 영향없음)
@@ -2188,6 +2191,7 @@ export class DJYurika {
         
         // 재생시각 카운터 멈추고 시간 구하기
         clearInterval(conn.pauseTimeCounterHandler);
+        conn.pauseTimeCounterHandler = null;
         const playedTime = Math.round((Date.now() - conn.songStartTimestamp - conn.pauseTimeCounter)/1000);
 
         if (song.duration > (playedTime + song.startOffset + 3) && !conn.skipFlag) { // ignore at most 3sec
@@ -2229,6 +2233,10 @@ export class DJYurika {
             conn.queue.songs.shift();
             break;
         }
+        
+        // 해당 player 객체에서 1번도 호출되지 않은 이벤트 핸들러들이 생길 수 있음 (pause)
+        // 어차피 재귀함수로 인해 새로 이벤트 정의를 하므로 all clear
+        subscription.player.removeAllListeners();
         this.play(guild, conn.queue.songs[0], conn);
       
       })
