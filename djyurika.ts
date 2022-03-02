@@ -1487,9 +1487,9 @@ export class DJYurika {
    * @param conn 
    */
   private pause(message: Message | PartialMessage, conn: BotConnection) {
-    const player = conn.subscription.player;
+    const player = conn.subscription?.player;
     if (!player) {
-      return message.channel.send('⚠ `재생 중이 아님`');
+      return message.reply('⚠ `재생 중이 아님`');
     }
 
     switch (player.state.status) {
@@ -1506,9 +1506,9 @@ export class DJYurika {
    * @param conn 
    */
   private resume(message: Message | PartialMessage, conn: BotConnection) {
-    const player = conn.subscription.player;
+    const player = conn.subscription?.player;
     if (!player) {
-      return message.channel.send('⚠ `재생 중이 아님`');
+      return message.reply('⚠ `재생 중이 아님`');
     }
 
     switch (player.state.status) {
