@@ -2367,12 +2367,21 @@ export class DJYurika {
       ]);
     }
     catch (err) {
-      const error = JSON.parse(err).error as SearchError;
-      console.error(error);
-      message.channel.send('```cs\n'+
-      '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-      `Error: ${error.code} - ${error.message}`+
-      '```');
+      console.error(err);
+      try {
+        const error = JSON.parse(err).error as SearchError;
+        message.channel.send('```cs\n'+
+        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+        `Error: ${error.code} - ${error.message}`+
+        '```');
+      }
+      catch (e) {
+        message.channel.send('```cs\n'+
+        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+        `Error: ${err.toString()}`+
+        '```');
+      }
+      
       return;
     }
   
