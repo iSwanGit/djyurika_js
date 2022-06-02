@@ -352,7 +352,10 @@ export class DJYurika {
       // 같은 name 가지는 서브커맨드 이런거 일단 생각 안함
       // commands.filter(cmd => supportGuildCommands.find(c => c.name === cmd.name))
       commands.forEach(async (cmd) => {
-        await cmd.permissions.add({ permissions });
+        await guild.commands.permissions.add({ command: cmd.id, permissions }).catch(e => {
+          console.error(`failed to add permission to ${guild.name} - ${e}`);
+          console.info(`cmd: ${cmd.name}, permissions: [${permissions.map(p => `{ id: ${p.id}, type: ${p.type}, permission: ${p.permission} }, `)}`);
+        });
       });
       
     }
@@ -412,15 +415,15 @@ export class DJYurika {
         case 'support':
           await this.sendSupportServerLink(interaction);
           break;
-        
-        case 'queue':
-          await interaction.reply('Server info.');
-          break;
 
         // admin
 
         case 'dev_active':
           await this.sendActiveServers(interaction);
+          break;
+
+        default:
+          await interaction.reply({ content: '미지원 명령입니다.', ephemeral: true })
           break;
       }
     });

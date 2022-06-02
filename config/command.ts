@@ -2,9 +2,9 @@ import { SlashCommandBuilder } from '@discordjs/builders'
 import { ChannelType } from 'discord-api-types';
 
 export const defaultCommands = [
-  new SlashCommandBuilder()
-    .setName('hello')
-    .setDescription('Hello world!'),
+  // new SlashCommandBuilder()
+  //   .setName('hello')
+  //   .setDescription('Hello world!'),
   new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show command list and description'),
