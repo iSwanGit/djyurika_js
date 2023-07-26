@@ -5,7 +5,7 @@
   "main": "app.ts",
   "scripts": {
     "start": "tsc && node build/app.js",
-    "test": "ts-node",
+    "test": "ts-node app.ts",
     "build": "tsc"
   },
   "author": "",

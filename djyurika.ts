@@ -73,7 +73,7 @@ export class DJYurika {
   private readonly acceptEmoji = '⭕';
   private readonly denyEmoji = '❌';
   private readonly helpCmd = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -90,7 +90,7 @@ export class DJYurika {
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
   private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -111,7 +111,7 @@ export class DJYurika {
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
   private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~npid`: 현재 곡 ID\n' + 
   '`~s`: 건너뛰기\n' +
@@ -355,6 +355,7 @@ export class DJYurika {
         await guild.commands.permissions.add({ command: cmd.id, permissions }).catch(e => {
           console.error(`failed to add permission to ${guild.name} - ${e}`);
           console.info(`cmd: ${cmd.name}, permissions: [${permissions.map(p => `{ id: ${p.id}, type: ${p.type}, permission: ${p.permission} }, `)}`);
+          console.info(`guild id was ${guild.id} (${guild.name})`);
         });
       });
       
@@ -1394,21 +1395,45 @@ export class DJYurika {
     if (!conn.queue || conn.queue.songs.length === 0) {
       return;
     }
+
+    // ~q, ~q <start_index>, ~q <start_index> <count_max_50> ;  cannot exceed 50
+
+    const args = message.content.split(' ');
+    let from = 1;
+    let fetchCount = this.maxQueueTextRowSize;
+    if (args.length >= 2) {
+      const f = parseInt(args[1]);
+      const c = parseInt(args[2]);
+      from = isNaN(f) ? 1 : f;
+      if (!isNaN(c)) {
+        if (c > 50) {
+          return message.channel.send('❌ `최대 50곡까지만 출력 가능합니다`');
+        }
+        fetchCount = c;
+      }      
+    }
+    if (from < 1 || fetchCount < 1) {
+      return message.reply('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+    }
   
     const guildName = message.guild.name;
     let queueData: string[] = [];
     const currentSong = conn.queue.songs[0];
     // slice maximum 50(env value)
     const length = conn.queue.songs.length - 1;
-    const promise = conn.queue.songs.slice(1, this.maxQueueTextRowSize+1).map((song, index) => {
+    const promise = conn.queue.songs.slice(from, from+fetchCount).map((song, index) => {
       if (!queueData[Math.trunc(index / this.queueGroupRowSize)]) {
         queueData[Math.trunc(index / this.queueGroupRowSize)] = '';
       }
-      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+1}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
+      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+from}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
     });
     await Promise.all(promise);
-    if (length > this.maxQueueTextRowSize) {
-      queueData[Math.trunc(this.maxQueueTextRowSize / this.queueGroupRowSize)] = `and ${length - this.maxQueueTextRowSize} more song(s)`;
+
+    console.log(conn.queue.songs.slice(from, fetchCount+1));
+    
+    // 뒤에 더 남은 경우
+    if (length - from > fetchCount) {
+      queueData[Math.ceil(fetchCount / this.queueGroupRowSize)] = `and ${length - from - fetchCount + 1} more song(s)`;
     }
   
     let loopStr = '';
@@ -1435,7 +1460,7 @@ export class DJYurika {
           inline: false,
         },
         {
-          name: '대기열',
+          name: `대기열 (총 ${length}곡)`,
           value: queueData[0] || '없음 (다음 곡 랜덤 재생)',
           inline: false,
         },
@@ -2122,7 +2147,7 @@ export class DJYurika {
       if (!song) {
         song = await this.selectRandomSong(guild);
         conn.queue.songs.push(song);
-        console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
+        console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id}) (url: ${song.url})`);
       }
     }
     catch (err) {
@@ -2150,7 +2175,11 @@ export class DJYurika {
       switch (song.source) {
         case SongSource.YOUTUBE:
           // my soundcloud client_id expired...
-          const stream = await playDl.stream(song.url, { seek: song.startOffset ?? 0 });
+          const stream = await playDl.stream(song.url, { seek: song.startOffset ?? 0 })
+          .catch(err => {
+            console.error('Failed to play stream'); // play-dl 에러 자꾸 터져서 추가
+            throw err;
+          });
           conn.currentAudioResource = createAudioResource(stream.stream, { inputType: stream.type, inlineVolume: true });
           break;
         
