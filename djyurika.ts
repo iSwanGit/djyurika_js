@@ -2,6 +2,7 @@ import * as pkgJson from './package.json';
 
 import {
   ApplicationCommandPermissionData,
+  ButtonInteraction,
   Client,
   CommandInteraction,
   DMChannel,
@@ -11,6 +12,8 @@ import {
   GuildMemberRoleManager,
   Intents,
   Message,
+  MessageActionRow,
+  MessageButton,
   MessageEmbed,
   MessageReaction,
   NewsChannel,
@@ -377,8 +380,6 @@ export class DJYurika {
 
   private registerSlashCommandInteraction() {
     this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isCommand()) return;
-
       // load config
       const cfg = this.overrideConfigs.get(interaction.guild.id) ?? this.serverConfigs.get(interaction.guild.id) ?? this.createConfig(interaction.guild);
 
@@ -390,42 +391,59 @@ export class DJYurika {
         this.connections.set(interaction.guild.id, conn);
       }
     
-      const { commandName } = interaction;
+      if (interaction.isCommand()) {
+        const { commandName } = interaction;
 
-      switch (commandName) {
-        case 'about':
-          await this.sendWelcomeMessage(interaction, conn);
-          break;
+        switch (commandName) {
+          case 'about':
+            await this.sendWelcomeMessage(interaction, conn);
+            break;
 
-        case 'help':
-          await this.sendHelp(interaction, conn);
-          break;
+          case 'help':
+            await this.sendHelp(interaction, conn);
+            break;
 
-        case 'channel':
-          await this.registerCommandChannelBySlash(interaction, conn);
-          break;
+          case 'channel':
+            await this.registerCommandChannelBySlash(interaction, conn);
+            break;
 
-        case 'invite':
-          await this.sendInviteLink(interaction);
-          break;
+          case 'invite':
+            await this.sendInviteLink(interaction);
+            break;
 
-        case 'status':
-          await this.sendBotStatus(interaction);
-          break;
+          case 'status':
+            await this.sendBotStatus(interaction);
+            break;
 
-        case 'support':
-          await this.sendSupportServerLink(interaction);
-          break;
+          case 'support':
+            await this.sendSupportServerLink(interaction);
+            break;
 
-        // admin
+          case 'queue':
+            await this.getQueueInteraction(interaction, conn);
+            break;
 
-        case 'dev_active':
-          await this.sendActiveServers(interaction);
-          break;
+          // admin
 
-        default:
-          await interaction.reply({ content: '미지원 명령입니다.', ephemeral: true })
-          break;
+          case 'dev_active':
+            await this.sendActiveServers(interaction);
+            break;
+
+          default:
+            await interaction.reply({ content: '미지원 명령입니다.', ephemeral: true })
+            break;
+        }
+      }
+      else if (interaction.isButton()) {
+        const { customId, message } = interaction;
+
+        // 재생 대기열 관련, 만료된 메시지 거르기
+        if (customId === 'first'
+        || customId === 'prev'
+        || customId === 'next'
+        || customId === 'end') {
+            this.updateQueueInteraction(interaction, conn)
+        }
       }
     });
   }
@@ -1473,6 +1491,165 @@ export class DJYurika {
     }
   
     return message.channel.send({ embeds: [embedMessage] });
+  }
+
+  private async getQueueInteraction(interaction: CommandInteraction, conn: BotConnection) {
+    if (!conn.queue || conn.queue.songs.length === 0) {
+      return await interaction.reply({
+        content: `대기열이 비어 있습니다!`,
+        ephemeral: true
+      });
+    }
+
+    const disabledButtonRow = new MessageActionRow()
+      .addComponents(
+        new MessageButton()
+          .setCustomId('first')
+          .setEmoji('⏮️')
+          .setStyle('PRIMARY')
+          .setDisabled(true),
+        new MessageButton()
+          .setCustomId('prev')
+          // .setLabel('Prev')
+          .setEmoji('⏪')
+          .setStyle('PRIMARY')
+          .setDisabled(true),
+        new MessageButton()
+          .setCustomId('next')
+          // .setLabel('Next')
+          .setEmoji('⏩')
+          .setStyle('PRIMARY')
+          .setDisabled(true),
+        new MessageButton()
+          .setCustomId('end')
+          .setEmoji('⏭️')
+          .setStyle('PRIMARY')
+          .setDisabled(true),
+    );
+
+    await interaction.deferReply();
+    let reqPage = interaction.options.getInteger('page') ?? 1;
+    const result = await this.makeQueueInteractionMessage(interaction, conn, reqPage);
+    
+    (conn.recentQueueMessageList.get(interaction.channel.id)?.message as Message)?.edit({ components: [disabledButtonRow] });
+    const msg = await interaction.followUp(result.msgOption);
+    conn.recentQueueMessageList.set(interaction.channel.id, { message: msg, currentPage: result.page });
+  }
+
+  private async updateQueueInteraction(interaction: ButtonInteraction, conn: BotConnection) {
+    const recentQueueObj = conn.recentQueueMessageList.get(interaction.channel.id);
+    const message = recentQueueObj?.message;
+    if (!message) return;
+
+    let reqPage = recentQueueObj?.currentPage;
+    if (interaction.customId === 'first') {
+      reqPage = 1;
+    }
+    else if (interaction.customId === 'prev') {
+      reqPage -= 1;
+    }
+    else if (interaction.customId === 'next') {
+      reqPage += 1;
+    }
+    else if (interaction.customId === 'end') {
+      reqPage = -1;
+    }
+
+    const result = await this.makeQueueInteractionMessage(interaction, conn, reqPage);
+    await (message as Message).edit(result.msgOption);
+    await interaction.update({});
+
+    conn.recentQueueMessageList.set(interaction.channel.id, { ...recentQueueObj, currentPage: result.page });
+  }
+
+  private async makeQueueInteractionMessage(interaction: CommandInteraction | ButtonInteraction, conn: BotConnection, reqPage: number) {
+    const guildName = interaction.guild.name;
+      
+    let queueData: string[] = [];
+    const currentSong = conn.queue.songs[0];
+    // slice maximum 50(env value)
+    const length = conn.queue.songs.length - 1;
+    
+    const fetchCount = 10;  // 보기편하라고!!!
+    const maxPage = Math.ceil(length / fetchCount) || 1;
+    if (reqPage > maxPage || reqPage < 0) {
+      // await interaction.editReply({ content: `⚠ \`set last page ${maxPage} instead of ${reqPage}\`` });
+      reqPage = maxPage;
+    }
+
+    const start = fetchCount * (reqPage - 1) + 1;
+    const end = start + fetchCount;
+    const promise = conn.queue.songs.slice(start, end).map((song, index) => {
+      if (!queueData[Math.trunc(index / this.queueGroupRowSize)]) {
+        queueData[Math.trunc(index / this.queueGroupRowSize)] = '';
+      }
+      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+start}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
+    });
+    await Promise.all(promise);
+  
+    let loopStr = '';
+    switch (conn.loopFlag) {
+      case LoopType.SINGLE:
+        loopStr = '\n*(한곡 반복 켜짐)';
+        break;
+      case LoopType.LIST:
+        loopStr = '\n*(리스트 반복 켜짐)';
+        break;
+    }
+    const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + loopStr;
+    const embedMessage = new MessageEmbed()
+      .setAuthor({
+        name: `${guildName}의 재생목록`,
+        iconURL: interaction.guild.me.user.avatarURL(),
+        url: interaction.guild.me.user.avatarURL()
+      })
+      .setColor('#FFC0CB')
+      .addFields(
+        {
+          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name + (conn.subscription.player.state.status === AudioPlayerStatus.Paused ? ' (일시 정지됨)' : ''),
+          value: nowPlayingStr,
+          inline: false,
+        },
+        {
+          name: `대기열 (총 ${length}곡)`,
+          value: queueData[0] || '없음 (다음 곡 랜덤 재생)',
+          inline: false,
+        },
+      );
+    
+    if (queueData.length > 1) {
+      for (let q of queueData.slice(1)) {
+        embedMessage.addField('\u200B', q, false);
+      }
+    }
+  
+    const actionRow = new MessageActionRow()
+      .addComponents(
+        new MessageButton()
+          .setCustomId('first')
+          .setEmoji('⏮️')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === 1),
+        new MessageButton()
+          .setCustomId('prev')
+          // .setLabel('Prev')
+          .setEmoji('⏪')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === 1),
+        new MessageButton()
+          .setCustomId('next')
+          // .setLabel('Next')
+          .setEmoji('⏩')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === maxPage),
+        new MessageButton()
+          .setCustomId('end')
+          .setEmoji('⏭️')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === maxPage),
+      );
+
+    return { msgOption: { embeds: [embedMessage], components: [actionRow] }, page: reqPage };
   }
   
   private async stop(message: Message | PartialMessage, delMsgId: string, conn: BotConnection) {

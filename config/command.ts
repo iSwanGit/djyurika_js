@@ -34,6 +34,16 @@ export const defaultCommands = [
   new SlashCommandBuilder()
     .setName('support')
     .setDescription('Show infos for support'),
+
+  new SlashCommandBuilder()
+    .setName('queue')
+    .setDescription('Show play queue')
+      .addIntegerOption(option => 
+        option.setName('page')
+          .setDescription('Queue page')
+          .setRequired(false)
+          .setMinValue(1)
+      ),
 ].map(command => command.toJSON());
 
 export const supportGuildCommands = [
