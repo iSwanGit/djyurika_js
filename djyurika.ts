@@ -75,7 +75,7 @@ export class DJYurika {
   private readonly cancelEmoji = '❌';
   private readonly acceptEmoji = '⭕';
   private readonly denyEmoji = '❌';
-  private readonly helpCmd = '`~p`: 노래 검색/재생\n' +
+  private readonly helpCmd = '`~p` `/play`: 노래 검색/재생\n' +
   '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
@@ -92,7 +92,7 @@ export class DJYurika {
   '`/invite`: 봇 초대 링크 전송\n' + 
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
-  private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
+  private readonly helpCmdMod = '`~p` `/play`: 노래 검색/재생\n' +
   '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
@@ -113,7 +113,7 @@ export class DJYurika {
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
-  private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
+  private readonly helpCmdDev = '`~p` `/play`: 노래 검색/재생\n' +
   '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~npid`: 현재 곡 ID\n' + 
