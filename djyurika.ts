@@ -76,7 +76,7 @@ export class DJYurika {
   private readonly acceptEmoji = '⭕';
   private readonly denyEmoji = '❌';
   private readonly helpCmd = '`~p`: 노래 검색/재생\n' +
-  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -93,7 +93,7 @@ export class DJYurika {
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
   private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
-  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -114,7 +114,7 @@ export class DJYurika {
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
   private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
-  '`~q` `~q <start_index> (<count>)`: 대기열 정보\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~npid`: 현재 곡 ID\n' + 
   '`~s`: 건너뛰기\n' +
@@ -921,6 +921,28 @@ export class DJYurika {
         // 봇이 나가진 경우
         getVoiceConnection(oldState.guild.id).destroy();
         return;
+      }
+
+      // 봇 혼자 남은지 5분이 넘어가면 자동 종료
+      if (conn.joinedVoiceChannel.members.size === 1) {
+        console.log(`[${oldState.guild.name}] bot is alone`);
+        conn.aloneExitTimeoutHandler = setTimeout(async () => {
+          try {
+            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+            this.stop(message, null, conn);
+          }
+          catch (err) {
+            console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+            this.stop(null, null, conn);
+          }
+        }, 5 * 60 * 1000);
+      }
+      else if (conn.joinedVoiceChannel.members.size > 1) {
+        if (conn.aloneExitTimeoutHandler) {
+          console.log(`[${oldState.guild.name}] bot is not alone`);
+          clearTimeout(conn.aloneExitTimeoutHandler);
+          conn.aloneExitTimeoutHandler = null;
+        }
       }
     
       let state: UpdatedVoiceState;
@@ -2248,6 +2270,8 @@ export class DJYurika {
     // if (this.connections.has(serverId)) {
     //   this.connections.delete(serverId);
     // }
+    clearTimeout(conn.aloneExitTimeoutHandler);
+    conn.aloneExitTimeoutHandler = null;
     console.log(`[${serverName}] ` + '음성 채널 연결 종료됨');
   }
   

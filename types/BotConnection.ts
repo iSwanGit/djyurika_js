@@ -13,6 +13,7 @@ export class BotConnection {
   recentNowPlayingMessage: Message;
   npMsgIntervalHandler: NodeJS.Timeout;
   pauseTimeCounterHandler: NodeJS.Timeout;
+  aloneExitTimeoutHandler: NodeJS.Timeout;
   config: Config;
 
   songStartTimestamp: number;
