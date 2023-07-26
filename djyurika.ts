@@ -171,6 +171,31 @@ export class DJYurika {
   private readonly queueGroupRowSize: number;
   private readonly textChannelPermissions: PermissionString[];
   private readonly voiceChannelPermissions: PermissionString[];
+
+  private readonly disabledButtonRow = new MessageActionRow()
+  .addComponents(
+    new MessageButton()
+      .setCustomId('first')
+      .setEmoji('⏮️')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('prev')
+      .setEmoji('⏪')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('next')
+      .setEmoji('⏩')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('end')
+      .setEmoji('⏭️')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+  );
+  
   
   constructor() {
     this.db = new DJYurikaDB();
@@ -1523,37 +1548,11 @@ export class DJYurika {
       });
     }
 
-    const disabledButtonRow = new MessageActionRow()
-      .addComponents(
-        new MessageButton()
-          .setCustomId('first')
-          .setEmoji('⏮️')
-          .setStyle('PRIMARY')
-          .setDisabled(true),
-        new MessageButton()
-          .setCustomId('prev')
-          // .setLabel('Prev')
-          .setEmoji('⏪')
-          .setStyle('PRIMARY')
-          .setDisabled(true),
-        new MessageButton()
-          .setCustomId('next')
-          // .setLabel('Next')
-          .setEmoji('⏩')
-          .setStyle('PRIMARY')
-          .setDisabled(true),
-        new MessageButton()
-          .setCustomId('end')
-          .setEmoji('⏭️')
-          .setStyle('PRIMARY')
-          .setDisabled(true),
-    );
-
     await interaction.deferReply();
     let reqPage = interaction.options.getInteger('page') ?? 1;
     const result = await this.makeQueueInteractionMessage(interaction, conn, reqPage);
     
-    (conn.recentQueueMessageList.get(interaction.channel.id)?.message as Message)?.edit({ components: [disabledButtonRow] });
+    (conn.recentQueueMessageList.get(interaction.channel.id)?.message as Message)?.edit({ components: [this.disabledButtonRow] });
     const msg = await interaction.followUp(result.msgOption);
     conn.recentQueueMessageList.set(interaction.channel.id, { message: msg, currentPage: result.page });
   }
@@ -2272,6 +2271,10 @@ export class DJYurika {
     // }
     clearTimeout(conn.aloneExitTimeoutHandler);
     conn.aloneExitTimeoutHandler = null;
+
+    conn.recentQueueMessageList.forEach(obj => (obj.message as Message).edit({ components: [this.disabledButtonRow] }));
+    conn.recentQueueMessageList.clear();
+
     console.log(`[${serverName}] ` + '음성 채널 연결 종료됨');
   }
   
