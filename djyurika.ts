@@ -4,6 +4,7 @@ import {
   ApplicationCommandPermissionData,
   ButtonInteraction,
   Client,
+  Collection,
   CommandInteraction,
   DMChannel,
   EmbedFieldData,
@@ -20,6 +21,7 @@ import {
   PartialDMChannel,
   PartialMessage,
   PermissionString,
+  Role,
   TextChannel,
   ThreadChannel,
   User,
@@ -471,12 +473,17 @@ export class DJYurika {
       else if (interaction.isButton()) {
         const { customId, message } = interaction;
 
-        // 재생 대기열 관련, 만료된 메시지 거르기
-        if (customId === 'first'
-        || customId === 'prev'
-        || customId === 'next'
-        || customId === 'end') {
-            this.updateQueueInteraction(interaction, conn)
+        switch (customId) {
+          case 'first':
+          case 'prev':
+          case 'next':
+          case 'end':
+            await this.updateQueueInteraction(interaction, conn)
+            break;
+
+          case 'send_help_dm':
+            await this.sendHelpToDM(interaction, conn);
+            break;
         }
       }
     });
@@ -1214,8 +1221,37 @@ export class DJYurika {
     // }
     
     const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
-
     const config = conn.config;
+    
+    const embedMessage = this.getHelpEmbed(roles, config);
+
+    const sendDMButton = new MessageActionRow().addComponents(
+      new MessageButton().setCustomId('send_help_dm').setStyle('SECONDARY').setLabel('Send to DM'))
+    if (sourceObj.type === 'APPLICATION_COMMAND') {
+      await sourceObj.reply({ embeds: [embedMessage], components: [sendDMButton] });
+      if (config?.commandChannelID === null) {
+        await (sourceObj as CommandInteraction).followUp({ embeds: [this.welcomeMessage] });
+      }
+    }
+    else {
+      const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
+      await sourceObj.reply({ embeds, components: [sendDMButton] });
+    }
+    
+    // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
+    // 현재 null일 때 채널등록 유도
+  }
+
+  private async sendHelpToDM(interaction: ButtonInteraction, conn: BotConnection) {
+    const roles = (interaction.member.roles as GuildMemberRoleManager).cache;
+    const config = conn.config;
+
+    const embedMessage = this.getHelpEmbed(roles, config);
+    await interaction.user.send({ embeds: [embedMessage] });
+    await interaction.reply({});
+  }
+
+  private getHelpEmbed(roles: Collection<string, Role>, config: Config) {
     const cmdName = '명령어';
     let cmdValue: string;
     if (checkDeveloperRole(roles, config)) {
@@ -1228,10 +1264,10 @@ export class DJYurika {
       cmdValue = this.helpCmd;
     }
   
-    const embedMessage = new MessageEmbed()
+    return new MessageEmbed()
       .setAuthor({
         name: '사용법',
-        iconURL: sourceObj.guild.me.user.avatarURL(),
+        iconURL: this.client.user.avatarURL(),
         url: environment.githubRepoUrl
       })
       .setColor('#ffff00')
@@ -1248,20 +1284,6 @@ export class DJYurika {
         },
       )
       .setFooter({ text: `Version: v${pkgJson.version}` });
-
-    if (sourceObj.type === 'APPLICATION_COMMAND') {
-      await sourceObj.reply({ embeds: [embedMessage] });
-      if (config?.commandChannelID === null) {
-        await (sourceObj as CommandInteraction).followUp({ embeds: [this.welcomeMessage] });
-      }
-    }
-    else {
-      const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
-      await sourceObj.reply({ embeds });
-    }
-    
-    // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
-    // 현재 null일 때 채널등록 유도
   }
 
   /**
@@ -1746,14 +1768,16 @@ export class DJYurika {
           message?.channel.messages.fetch(delMsgId).then(msg => msg.delete());
         }
 
-        // interaction channel == cmd channel: once, use interaction reply
-        // else: each
-        if (message?.type === 'APPLICATION_COMMAND') {
-          message.reply({ content: '👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!' })
-                  .catch(() => { message.reply({ content: '👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!', ephemeral: true }) });
+        // interaction, cmd channel same -> reply only
+        // not same -> reply, send message
+        // not same, not permitted to send -> reply ephemeral, send message
+        // message, cmd channel same -> reply. if bot's message, send message
+        const content = '👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!';
+        if (message?.member.user.id !== this.client.user.id) {
+          await message?.reply({ content }).catch(() => { message?.reply({ content, ephemeral: true }).catch() });
         }
-        if (message?.channel.id !== conn.config.commandChannelID) {
-          await (message?.guild.channels.cache.get(conn.config.commandChannelID) as TextChannel)?.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
+        else if (message?.channel.id !== conn.config.commandChannelID || message?.member.user.id === this.client.user.id) {
+          await (message?.guild.channels.cache.get(conn.config.commandChannelID) as TextChannel)?.send(content);
         }
       }
       catch (err) {
@@ -2520,17 +2544,17 @@ export class DJYurika {
         }
 
         // if bot is alone and queue is empty, then stop
-        if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
-          try {
-            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-            this.stop(message, null, conn);
-          }
-          catch (err) {
-            console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
-            this.stop(null, null, conn);
-          }
-          return;
-        }
+        // if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
+        //   try {
+        //     const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+        //     this.stop(message, null, conn);
+        //   }
+        //   catch (err) {
+        //     console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+        //     this.stop(null, null, conn);
+        //   }
+        //   return;
+        // }
 
         conn.skipFlag = false;  // reset flag
 
