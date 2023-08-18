@@ -2,7 +2,9 @@ import * as pkgJson from './package.json';
 
 import {
   ApplicationCommandPermissionData,
+  ButtonInteraction,
   Client,
+  Collection,
   CommandInteraction,
   DMChannel,
   EmbedFieldData,
@@ -11,12 +13,15 @@ import {
   GuildMemberRoleManager,
   Intents,
   Message,
+  MessageActionRow,
+  MessageButton,
   MessageEmbed,
   MessageReaction,
   NewsChannel,
   PartialDMChannel,
   PartialMessage,
   PermissionString,
+  Role,
   TextChannel,
   ThreadChannel,
   User,
@@ -72,8 +77,8 @@ export class DJYurika {
   private readonly cancelEmoji = '❌';
   private readonly acceptEmoji = '⭕';
   private readonly denyEmoji = '❌';
-  private readonly helpCmd = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  private readonly helpCmd = '`~p` `/play`: 노래 검색/재생\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -89,8 +94,8 @@ export class DJYurika {
   '`/invite`: 봇 초대 링크 전송\n' + 
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n';
-  private readonly helpCmdMod = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  private readonly helpCmdMod = '`~p` `/play`: 노래 검색/재생\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~s`: 건너뛰기\n' +
   '`~r`: 현재 곡 재시작\n' +
@@ -110,8 +115,8 @@ export class DJYurika {
   '`/support`: 봇 지원(서포트) 정보 안내\n' +
   '`~ping`: 지연시간 측정(음성/메시지)\n' +
   '`~v`: 음량 조정\n';
-  private readonly helpCmdDev = '`~p`: 노래 검색/재생\n' +
-  '`~q`: 대기열 정보\n' +
+  private readonly helpCmdDev = '`~p` `/play`: 노래 검색/재생\n' +
+  '`~q` `/queue` `~q <start_index> (<count>)`: 대기열 정보\n' +
   '`~np`: 현재 곡 정보\n' +
   '`~npid`: 현재 곡 ID\n' + 
   '`~s`: 건너뛰기\n' +
@@ -168,6 +173,31 @@ export class DJYurika {
   private readonly queueGroupRowSize: number;
   private readonly textChannelPermissions: PermissionString[];
   private readonly voiceChannelPermissions: PermissionString[];
+
+  private readonly disabledButtonRow = new MessageActionRow()
+  .addComponents(
+    new MessageButton()
+      .setCustomId('first')
+      .setEmoji('⏮️')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('prev')
+      .setEmoji('⏪')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('next')
+      .setEmoji('⏩')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+    new MessageButton()
+      .setCustomId('end')
+      .setEmoji('⏭️')
+      .setStyle('PRIMARY')
+      .setDisabled(true),
+  );
+  
   
   constructor() {
     this.db = new DJYurikaDB();
@@ -355,6 +385,7 @@ export class DJYurika {
         await guild.commands.permissions.add({ command: cmd.id, permissions }).catch(e => {
           console.error(`failed to add permission to ${guild.name} - ${e}`);
           console.info(`cmd: ${cmd.name}, permissions: [${permissions.map(p => `{ id: ${p.id}, type: ${p.type}, permission: ${p.permission} }, `)}`);
+          console.info(`guild id was ${guild.id} (${guild.name})`);
         });
       });
       
@@ -376,8 +407,6 @@ export class DJYurika {
 
   private registerSlashCommandInteraction() {
     this.client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isCommand()) return;
-
       // load config
       const cfg = this.overrideConfigs.get(interaction.guild.id) ?? this.serverConfigs.get(interaction.guild.id) ?? this.createConfig(interaction.guild);
 
@@ -389,42 +418,73 @@ export class DJYurika {
         this.connections.set(interaction.guild.id, conn);
       }
     
-      const { commandName } = interaction;
+      if (interaction.isCommand()) {
+        const { commandName } = interaction;
 
-      switch (commandName) {
-        case 'about':
-          await this.sendWelcomeMessage(interaction, conn);
-          break;
+        switch (commandName) {
+          case 'about':
+            await this.sendWelcomeMessage(interaction, conn);
+            break;
 
-        case 'help':
-          await this.sendHelp(interaction, conn);
-          break;
+          case 'help':
+            await this.sendHelp(interaction, conn);
+            break;
 
-        case 'channel':
-          await this.registerCommandChannelBySlash(interaction, conn);
-          break;
+          case 'channel':
+            await this.registerCommandChannelBySlash(interaction, conn);
+            break;
 
-        case 'invite':
-          await this.sendInviteLink(interaction);
-          break;
+          case 'invite':
+            await this.sendInviteLink(interaction);
+            break;
 
-        case 'status':
-          await this.sendBotStatus(interaction);
-          break;
+          case 'status':
+            await this.sendBotStatus(interaction);
+            break;
 
-        case 'support':
-          await this.sendSupportServerLink(interaction);
-          break;
+          case 'support':
+            await this.sendSupportServerLink(interaction);
+            break;
 
-        // admin
 
-        case 'dev_active':
-          await this.sendActiveServers(interaction);
-          break;
+          case 'play':
+            await this.executeInteraction(interaction, conn);
+            break;
 
-        default:
-          await interaction.reply({ content: '미지원 명령입니다.', ephemeral: true })
-          break;
+          case 'queue':
+            await this.getQueueInteraction(interaction, conn);
+            break;
+
+          case 'leave':
+            await this.requestStopInteraction(interaction, conn);
+            break;
+
+          // admin
+
+          case 'dev_active':
+            await this.sendActiveServers(interaction);
+            break;
+
+          default:
+            await interaction.reply({ content: '미지원 명령입니다.', ephemeral: true })
+            break;
+        }
+      }
+      else if (interaction.isButton()) {
+        const { customId, message } = interaction;
+
+        switch (customId) {
+          case 'first':
+          case 'prev':
+          case 'next':
+          case 'end':
+            await this.updateQueueInteraction(interaction, conn)
+            break;
+
+          case 'send_help_dm':
+            await this.sendHelpToDM(interaction, conn);
+            break;
+        }
       }
     });
   }
@@ -903,6 +963,28 @@ export class DJYurika {
         getVoiceConnection(oldState.guild.id).destroy();
         return;
       }
+
+      // 봇 혼자 남은지 5분이 넘어가면 자동 종료
+      if (conn.joinedVoiceChannel.members.size === 1) {
+        console.log(`[${oldState.guild.name}] bot is alone`);
+        conn.aloneExitTimeoutHandler = setTimeout(async () => {
+          try {
+            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+            this.stop(message, null, conn);
+          }
+          catch (err) {
+            console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+            this.stop(null, null, conn);
+          }
+        }, 5 * 60 * 1000);
+      }
+      else if (conn.joinedVoiceChannel.members.size > 1) {
+        if (conn.aloneExitTimeoutHandler) {
+          console.log(`[${oldState.guild.name}] bot is not alone`);
+          clearTimeout(conn.aloneExitTimeoutHandler);
+          conn.aloneExitTimeoutHandler = null;
+        }
+      }
     
       let state: UpdatedVoiceState;
       // discriminate voice state
@@ -1139,8 +1221,37 @@ export class DJYurika {
     // }
     
     const roles = (sourceObj.member.roles as GuildMemberRoleManager).cache;
-
     const config = conn.config;
+    
+    const embedMessage = this.getHelpEmbed(roles, config);
+
+    const sendDMButton = new MessageActionRow().addComponents(
+      new MessageButton().setCustomId('send_help_dm').setStyle('SECONDARY').setLabel('Send to DM'))
+    if (sourceObj.type === 'APPLICATION_COMMAND') {
+      await sourceObj.reply({ embeds: [embedMessage], components: [sendDMButton] });
+      if (config?.commandChannelID === null) {
+        await (sourceObj as CommandInteraction).followUp({ embeds: [this.welcomeMessage] });
+      }
+    }
+    else {
+      const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
+      await sourceObj.reply({ embeds, components: [sendDMButton] });
+    }
+    
+    // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
+    // 현재 null일 때 채널등록 유도
+  }
+
+  private async sendHelpToDM(interaction: ButtonInteraction, conn: BotConnection) {
+    const roles = (interaction.member.roles as GuildMemberRoleManager).cache;
+    const config = conn.config;
+
+    const embedMessage = this.getHelpEmbed(roles, config);
+    await interaction.user.send({ embeds: [embedMessage] });
+    await interaction.reply({});
+  }
+
+  private getHelpEmbed(roles: Collection<string, Role>, config: Config) {
     const cmdName = '명령어';
     let cmdValue: string;
     if (checkDeveloperRole(roles, config)) {
@@ -1153,10 +1264,10 @@ export class DJYurika {
       cmdValue = this.helpCmd;
     }
   
-    const embedMessage = new MessageEmbed()
+    return new MessageEmbed()
       .setAuthor({
         name: '사용법',
-        iconURL: sourceObj.guild.me.user.avatarURL(),
+        iconURL: this.client.user.avatarURL(),
         url: environment.githubRepoUrl
       })
       .setColor('#ffff00')
@@ -1173,20 +1284,6 @@ export class DJYurika {
         },
       )
       .setFooter({ text: `Version: v${pkgJson.version}` });
-
-    if (sourceObj.type === 'APPLICATION_COMMAND') {
-      await sourceObj.reply({ embeds: [embedMessage] });
-      if (config?.commandChannelID === null) {
-        await (sourceObj as CommandInteraction).followUp({ embeds: [this.welcomeMessage] });
-      }
-    }
-    else {
-      const embeds = config?.commandChannelID === null ? [embedMessage, this.welcomeMessage] : [embedMessage];
-      await sourceObj.reply({ embeds });
-    }
-    
-    // TODO: 기본 모든 채널을 다 열 경우 이 부분 수정 필요
-    // 현재 null일 때 채널등록 유도
   }
 
   /**
@@ -1275,11 +1372,64 @@ export class DJYurika {
     }
   }
 
+  private async executeInteraction(interaction: CommandInteraction, conn: BotConnection) {
+    await interaction.deferReply();
+    const arg = interaction.options.getString('source');
+    
+    // search not implemented
+    if (!!arg) {
+      return await interaction.followUp({ content: 'not implemented, please use `~p` :pray:', ephemeral: true });
+    }
+    
+    const voiceChannel = (interaction.member as GuildMember).voice.channel;
+    if (!voiceChannel) {
+      return await interaction.followUp({ content: '음성 채널에 들어와서 다시 요청해 주세요.', ephemeral: true });
+    }
+
+    // check permission of voice channel
+    const permissions = voiceChannel.permissionsFor(interaction.client.user);
+    if (!conn.joinedVoiceChannel && !(permissions.has('CONNECT') && permissions.has('SPEAK'))) {
+      return await interaction.editReply('```cs\n'+
+      '# Error: 요청 음성채널 권한 없음\n'+
+      '```');
+    }
+
+    // already joined, empty request
+    if (!arg) {
+      if (conn.joinedVoiceChannel) {
+        return await interaction.followUp({ content: '`/play <soundcloud_or_youtube_link>` or `/play <keyword>`', ephemeral: true });
+      }
+      else {
+        const commandChannel = interaction.guild.channels.cache.get(conn.config.commandChannelID) as TextChannel;
+        const message = await commandChannel.send(`\`Play request by ${interaction.guild.members.cache.get(interaction.user.id).displayName}\``);
+        await interaction.followUp({ content: `⏳ \`재생 준비 중...\`` });
+        try {
+          const randSong = await this.selectRandomSong(interaction.guild);
+          console.log('Play request with no args, pick random one');
+          this.playProcess(conn, message, interaction.user, randSong, null);
+          if (commandChannel.id === interaction.channel.id) {
+            // setTimeout(() => interaction.deleteReply(), 5000);
+          }
+          else {
+            await interaction.editReply({ content: `Hello world! <#${commandChannel.id}> 에서 상태를 확인하세요.` })
+          }
+        }
+        catch (err) {
+          console.error(err);
+          message.channel.send('History is empty, `~p <soundcloud_or_youtube_link>` or `~p <keyword>`');
+        }
+        finally {
+          return;
+        }   
+      }
+    }
+  }
+
   private async execute(message: Message | PartialMessage, conn: BotConnection) {
     const args = message.content.split(' ');
   
     if (args.length < 2 && conn.joinedVoiceChannel) {
-      return message.channel.send('`~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
+      return message.channel.send('`~p <soundcloud_or_youtube_link>` or `~p <keyword>`');
     }
   
     // Developer/Moderator skip voice check when music playing
@@ -1308,7 +1458,7 @@ export class DJYurika {
       }
       catch (err) {
         console.error(err);
-        message.channel.send('History is empty, `~p <soundcloud_or_youtube_link>` or `~p <youtube_keyword>`');
+        message.channel.send('History is empty, `~p <soundcloud_or_youtube_link>` or `~p <keyword>`');
       }
       finally {
         return;
@@ -1394,21 +1544,45 @@ export class DJYurika {
     if (!conn.queue || conn.queue.songs.length === 0) {
       return;
     }
+
+    // ~q, ~q <start_index>, ~q <start_index> <count_max_50> ;  cannot exceed 50
+
+    const args = message.content.split(' ');
+    let from = 1;
+    let fetchCount = this.maxQueueTextRowSize;
+    if (args.length >= 2) {
+      const f = parseInt(args[1]);
+      const c = parseInt(args[2]);
+      from = isNaN(f) ? 1 : f;
+      if (!isNaN(c)) {
+        if (c > 50) {
+          return message.channel.send('❌ `최대 50곡까지만 출력 가능합니다`');
+        }
+        fetchCount = c;
+      }      
+    }
+    if (from < 1 || fetchCount < 1) {
+      return message.reply('https://item.kakaocdn.net/do/7c321020a65461beb56bc44675acd57282f3bd8c9735553d03f6f982e10ebe70');
+    }
   
     const guildName = message.guild.name;
     let queueData: string[] = [];
     const currentSong = conn.queue.songs[0];
     // slice maximum 50(env value)
     const length = conn.queue.songs.length - 1;
-    const promise = conn.queue.songs.slice(1, this.maxQueueTextRowSize+1).map((song, index) => {
+    const promise = conn.queue.songs.slice(from, from+fetchCount).map((song, index) => {
       if (!queueData[Math.trunc(index / this.queueGroupRowSize)]) {
         queueData[Math.trunc(index / this.queueGroupRowSize)] = '';
       }
-      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+1}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
+      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+from}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
     });
     await Promise.all(promise);
-    if (length > this.maxQueueTextRowSize) {
-      queueData[Math.trunc(this.maxQueueTextRowSize / this.queueGroupRowSize)] = `and ${length - this.maxQueueTextRowSize} more song(s)`;
+
+    console.log(conn.queue.songs.slice(from, fetchCount+1));
+    
+    // 뒤에 더 남은 경우
+    if (length - from > fetchCount) {
+      queueData[Math.ceil(fetchCount / this.queueGroupRowSize)] = `and ${length - from - fetchCount + 1} more song(s)`;
     }
   
     let loopStr = '';
@@ -1435,7 +1609,7 @@ export class DJYurika {
           inline: false,
         },
         {
-          name: '대기열',
+          name: `대기열 (총 ${length}곡)`,
           value: queueData[0] || '없음 (다음 곡 랜덤 재생)',
           inline: false,
         },
@@ -1449,8 +1623,141 @@ export class DJYurika {
   
     return message.channel.send({ embeds: [embedMessage] });
   }
+
+  private async getQueueInteraction(interaction: CommandInteraction, conn: BotConnection) {
+    if (!conn.queue || conn.queue.songs.length === 0) {
+      return await interaction.reply({
+        content: `대기열이 비어 있습니다!`,
+        ephemeral: true
+      });
+    }
+
+    await interaction.deferReply();
+    let reqPage = interaction.options.getInteger('page') ?? 1;
+    const result = await this.makeQueueInteractionMessage(interaction, conn, reqPage);
+    
+    (conn.recentQueueMessageList.get(interaction.channel.id)?.message as Message)?.edit({ components: [this.disabledButtonRow] });
+    const msg = await interaction.followUp(result.msgOption);
+    conn.recentQueueMessageList.set(interaction.channel.id, { message: msg, currentPage: result.page });
+  }
+
+  private async updateQueueInteraction(interaction: ButtonInteraction, conn: BotConnection) {
+    const recentQueueObj = conn.recentQueueMessageList.get(interaction.channel.id);
+    const message = recentQueueObj?.message;
+    if (!message) return;
+
+    let reqPage = recentQueueObj?.currentPage;
+    if (interaction.customId === 'first') {
+      reqPage = 1;
+    }
+    else if (interaction.customId === 'prev') {
+      reqPage -= 1;
+    }
+    else if (interaction.customId === 'next') {
+      reqPage += 1;
+    }
+    else if (interaction.customId === 'end') {
+      reqPage = -1;
+    }
+
+    const result = await this.makeQueueInteractionMessage(interaction, conn, reqPage);
+    await (message as Message).edit(result.msgOption);
+    await interaction.update({});
+
+    conn.recentQueueMessageList.set(interaction.channel.id, { ...recentQueueObj, currentPage: result.page });
+  }
+
+  private async makeQueueInteractionMessage(interaction: CommandInteraction | ButtonInteraction, conn: BotConnection, reqPage: number) {
+    const guildName = interaction.guild.name;
+      
+    let queueData: string[] = [];
+    const currentSong = conn.queue.songs[0];
+    // slice maximum 50(env value)
+    const length = conn.queue.songs.length - 1;
+    
+    const fetchCount = 10;  // 보기편하라고!!!
+    const maxPage = Math.ceil(length / fetchCount) || 1;
+    if (reqPage > maxPage || reqPage < 0) {
+      // await interaction.editReply({ content: `⚠ \`set last page ${maxPage} instead of ${reqPage}\`` });
+      reqPage = maxPage;
+    }
+
+    const start = fetchCount * (reqPage - 1) + 1;
+    const end = start + fetchCount;
+    const promise = conn.queue.songs.slice(start, end).map((song, index) => {
+      if (!queueData[Math.trunc(index / this.queueGroupRowSize)]) {
+        queueData[Math.trunc(index / this.queueGroupRowSize)] = '';
+      }
+      queueData[Math.trunc(index / this.queueGroupRowSize)] += `${index+start}. [${song.title}](${song.url}) ${song.startOffset > 0 ? `(+${song.startOffset}초부터 시작)` : ''}\n`;
+    });
+    await Promise.all(promise);
   
-  private async stop(message: Message | PartialMessage, delMsgId: string, conn: BotConnection) {
+    let loopStr = '';
+    switch (conn.loopFlag) {
+      case LoopType.SINGLE:
+        loopStr = '\n*(한곡 반복 켜짐)';
+        break;
+      case LoopType.LIST:
+        loopStr = '\n*(리스트 반복 켜짐)';
+        break;
+    }
+    const nowPlayingStr = `[${currentSong?.title}](${currentSong?.url})` + loopStr;
+    const embedMessage = new MessageEmbed()
+      .setAuthor({
+        name: `${guildName}의 재생목록`,
+        iconURL: interaction.guild.me.user.avatarURL(),
+        url: interaction.guild.me.user.avatarURL()
+      })
+      .setColor('#FFC0CB')
+      .addFields(
+        {
+          name: '지금 재생 중: ' + conn.joinedVoiceChannel.name + (conn.subscription.player.state.status === AudioPlayerStatus.Paused ? ' (일시 정지됨)' : ''),
+          value: nowPlayingStr,
+          inline: false,
+        },
+        {
+          name: `대기열 (총 ${length}곡)`,
+          value: queueData[0] || '없음 (다음 곡 랜덤 재생)',
+          inline: false,
+        },
+      );
+    
+    if (queueData.length > 1) {
+      for (let q of queueData.slice(1)) {
+        embedMessage.addField('\u200B', q, false);
+      }
+    }
+  
+    const actionRow = new MessageActionRow()
+      .addComponents(
+        new MessageButton()
+          .setCustomId('first')
+          .setEmoji('⏮️')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === 1),
+        new MessageButton()
+          .setCustomId('prev')
+          // .setLabel('Prev')
+          .setEmoji('⏪')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === 1),
+        new MessageButton()
+          .setCustomId('next')
+          // .setLabel('Next')
+          .setEmoji('⏩')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === maxPage),
+        new MessageButton()
+          .setCustomId('end')
+          .setEmoji('⏭️')
+          .setStyle('PRIMARY')
+          .setDisabled(reqPage === maxPage),
+      );
+
+    return { msgOption: { embeds: [embedMessage], components: [actionRow] }, page: reqPage };
+  }
+  
+  private async stop(message: Message | PartialMessage | CommandInteraction, delMsgId: string, conn: BotConnection) {
     const voiceState = message.guild.me.voice;
     // onDisconnect callback will do clear queue
     if (voiceState !== undefined) {
@@ -1460,7 +1767,18 @@ export class DJYurika {
         if (delMsgId) {
           message?.channel.messages.fetch(delMsgId).then(msg => msg.delete());
         }
-        await message?.channel.send('👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!');
+
+        // interaction, cmd channel same -> reply only
+        // not same -> reply, send message
+        // not same, not permitted to send -> reply ephemeral, send message
+        // message, cmd channel same -> reply. if bot's message, send message
+        const content = '👋 또 봐요~ 음성채널에 없더라도 명령어로 부르면 달려올게요. 혹시 제가 돌아오지 않는다면 관리자를 불러주세요..!';
+        if (message?.member.user.id !== this.client.user.id) {
+          await message?.reply({ content }).catch(() => { message?.reply({ content, ephemeral: true }).catch() });
+        }
+        else if (message?.channel.id !== conn.config.commandChannelID || message?.member.user.id === this.client.user.id) {
+          await (message?.guild.channels.cache.get(conn.config.commandChannelID) as TextChannel)?.send(content);
+        }
       }
       catch (err) {
         console.error(err);
@@ -1670,6 +1988,17 @@ export class DJYurika {
     const targetSong = conn.queue.songs.splice(targetIndex, 1)[0];
     conn.queue.songs.splice(newIndex, 0, targetSong);
     message.channel.send('✅ `순서 변경 완료`');
+  }
+
+  private async requestStopInteraction(interaction: CommandInteraction, conn: BotConnection) {
+    // const voiceState = interaction.guild.me.voice;
+    // const voiceChannel = voiceState?.channel;
+    if (!conn.queue || conn.queue.songs.length === 0) {
+      return await interaction.reply({ content: '⚠ `봇이 작동 중이 아닙니다.`', ephemeral: true });
+      // return message.channel.send("There is no song that I could stop!");
+    }
+
+    this.stop(interaction, null, conn);
   }
   
   private async requestStop(message: Message | PartialMessage, conn: BotConnection, cfg: Config) {
@@ -2046,6 +2375,12 @@ export class DJYurika {
     // if (this.connections.has(serverId)) {
     //   this.connections.delete(serverId);
     // }
+    clearTimeout(conn.aloneExitTimeoutHandler);
+    conn.aloneExitTimeoutHandler = null;
+
+    conn.recentQueueMessageList.forEach(obj => (obj.message as Message).edit({ components: [this.disabledButtonRow] }));
+    conn.recentQueueMessageList.clear();
+
     console.log(`[${serverName}] ` + '음성 채널 연결 종료됨');
   }
   
@@ -2122,7 +2457,7 @@ export class DJYurika {
       if (!song) {
         song = await this.selectRandomSong(guild);
         conn.queue.songs.push(song);
-        console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id})`);
+        console.log(`[${guild.name}] ` + `랜덤 선곡: ${song.title} (${song.id}) (url: ${song.url})`);
       }
     }
     catch (err) {
@@ -2150,7 +2485,11 @@ export class DJYurika {
       switch (song.source) {
         case SongSource.YOUTUBE:
           // my soundcloud client_id expired...
-          const stream = await playDl.stream(song.url, { seek: song.startOffset ?? 0 });
+          const stream = await playDl.stream(song.url, { seek: song.startOffset ?? 0 })
+          .catch(err => {
+            console.error('Failed to play stream'); // play-dl 에러 자꾸 터져서 추가
+            throw err;
+          });
           conn.currentAudioResource = createAudioResource(stream.stream, { inputType: stream.type, inlineVolume: true });
           break;
         
@@ -2205,17 +2544,17 @@ export class DJYurika {
         }
 
         // if bot is alone and queue is empty, then stop
-        if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
-          try {
-            const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
-            this.stop(message, null, conn);
-          }
-          catch (err) {
-            console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
-            this.stop(null, null, conn);
-          }
-          return;
-        }
+        // if (conn.joinedVoiceChannel?.members.size === 1 && conn.queue.songs.length === 1) {
+        //   try {
+        //     const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
+        //     this.stop(message, null, conn);
+        //   }
+        //   catch (err) {
+        //     console.error(`Failed to send message to channel ${conn.queue?.textChannel?.id} : ${err.message}`);
+        //     this.stop(null, null, conn);
+        //   }
+        //   return;
+        // }
 
         conn.skipFlag = false;  // reset flag
 

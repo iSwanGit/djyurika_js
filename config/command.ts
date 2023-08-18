@@ -34,6 +34,27 @@ export const defaultCommands = [
   new SlashCommandBuilder()
     .setName('support')
     .setDescription('Show infos for support'),
+
+  new SlashCommandBuilder()
+    .setName('play')
+    .setDescription('Play or add to queue')
+    .addStringOption(option => 
+      option.setName('source')
+        .setRequired(false)
+        .setDescription('youtube link, soundcloud link, or any keyword. Random pick if empty')
+    ),
+  new SlashCommandBuilder()
+    .setName('queue')
+    .setDescription('Show play queue')
+    .addIntegerOption(option => 
+      option.setName('page')
+        .setDescription('Queue page')
+        .setRequired(false)
+        .setMinValue(1)
+    ),
+  new SlashCommandBuilder()
+    .setName('leave')
+    .setDescription('Stop and disconnect')
 ].map(command => command.toJSON());
 
 export const supportGuildCommands = [

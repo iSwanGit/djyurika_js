@@ -1,6 +1,7 @@
 import { GuildMember, Message, VoiceBasedChannel } from 'discord.js';
 import { AudioResource, PlayerSubscription } from '@discordjs/voice';
 import { LeaveRequest, MoveRequest, SearchResult, SongQueue, Config, AddPlaylistConfirmList, LoopType, PlayHistory } from '.';
+import { QueueInteractionList } from './QueueInteractionList';
 
 export class BotConnection {
   queue: SongQueue;
@@ -12,6 +13,7 @@ export class BotConnection {
   recentNowPlayingMessage: Message;
   npMsgIntervalHandler: NodeJS.Timeout;
   pauseTimeCounterHandler: NodeJS.Timeout;
+  aloneExitTimeoutHandler: NodeJS.Timeout;
   config: Config;
 
   songStartTimestamp: number;
@@ -24,4 +26,5 @@ export class BotConnection {
   moveRequestList = new Map<string, MoveRequest>();  // string: message id
   leaveRequestList = new Map<string, LeaveRequest>();  // string: message id
   addPlaylistConfirmList = new Map<string, AddPlaylistConfirmList>();  // string: message id
+  recentQueueMessageList = new Map<string, QueueInteractionList>(); // string: channel id
 }
