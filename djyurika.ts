@@ -2702,30 +2702,52 @@ export class DJYurika {
     
     let ytRes: YoutubeSearch;
     let scRes: SearchResponseAll;
-    try {
-      [ytRes, scRes] = await Promise.all([
-        getYoutubeSearchList(encodeURIComponent(keyword)),
-        this.getSoundcloudSearchList(keyword)
-      ]);
-    }
-    catch (err) {
-      console.error(err);
+
+    let errMsg: string[] = [];
+    const setErrMsg = (err: any, type?: string) => {
       try {
-        const error = JSON.parse(err).error as SearchError;
-        message.channel.send('```cs\n'+
-        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-        `Error: ${error.code} - ${error.message}`+
-        '```');
+        const errObj = JSON.parse(err).error as SearchError;
+        return `Error[${type}]: ${errObj.code} - ${errObj.message}`;
       }
-      catch (e) {
-        message.channel.send('```cs\n'+
-        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
-        `Error: ${err.toString()}`+
-        '```');
+      catch (e) {  
+        return `Error[${type}]: ${err.toString()}`;
       }
+    };
+    // try {
+      [ytRes, scRes] = await Promise.all([
+        getYoutubeSearchList(encodeURIComponent(keyword))
+          .catch(err => { errMsg.push(setErrMsg(err, 'YT')); return {} as YoutubeSearch; } ),
+        this.getSoundcloudSearchList(keyword)
+          .catch(err => { errMsg.push(setErrMsg(err, 'SC')); return {} as SearchResponseAll; })
+      ]);
+    // }
+    // catch (err) {
+    //   console.error(err);
+    //   try {
+    //     const error = JSON.parse(err).error as SearchError;
+    //     message.channel.send('```cs\n'+
+    //     '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+    //     `Error: ${error.code} - ${error.message}`+
+    //     '```');
+    //   }
+    //   catch (e) {
+    //     message.channel.send('```cs\n'+
+    //     '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n'+
+    //     `Error: ${err.toString()}`+
+    //     '```');
+    //   }
       
-      return;
+    //   return;
+    // }
+
+    if (errMsg.length > 0) {
+      message.channel.send('```cs\n'+
+        '# 에러가 발생했습니다. 잠시 후 다시 사용해주세요.\n' +
+        errMsg.reduce((a, b) => a + '\n' + b, '') +
+        '```');
     }
+
+    if (!ytRes && !scRes) return;
   
     const searchResult = new SearchResult();
     searchResult.songUrls = [];
