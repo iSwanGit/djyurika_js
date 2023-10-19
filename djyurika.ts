@@ -524,7 +524,7 @@ export class DJYurika {
 
   private registerGuildJoinHandler() {
     this.client.on('guildCreate', async guild => {
-      console.log('guild add');
+      console.log(`guild add: ${guild.name}(${guild.id})`);
 
       try {
         await this.registerGuildCommand(guild);
