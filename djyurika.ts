@@ -956,6 +956,9 @@ export class DJYurika {
       
       if (!conn?.joinedVoiceChannel) return;
 
+      // 다른 채널에서의 변동 무시
+      if (conn.joinedVoiceChannel.id !== oldState.channel?.id && conn.joinedVoiceChannel.id !== newState.channel?.id) return;
+
       // if bot (disconnected by discord(guild admin))
       // 바로 연결끊기 해버린 경우 여기서 잡아내야함
       if (oldState.member.id === this.client.user.id && !newState.channel) {
@@ -967,6 +970,7 @@ export class DJYurika {
       // 봇 혼자 남은지 5분이 넘어가면 자동 종료
       if (conn.joinedVoiceChannel.members.size === 1) {
         console.log(`[${oldState.guild.name}] bot is alone`);
+        conn.aloneExitTimeoutHandler && clearTimeout(conn.aloneExitTimeoutHandler);
         conn.aloneExitTimeoutHandler = setTimeout(async () => {
           try {
             const message = await conn.queue.textChannel.send("앗.. 아무도 없네요 👀💦");
@@ -2521,7 +2525,7 @@ export class DJYurika {
           }, environment.timeCounterTickInterval);
         }
       });
-      subscription.player.once(AudioPlayerStatus.Playing, (oldState, newState) => {
+      subscription.player.on(AudioPlayerStatus.Playing, (oldState, newState) => {
         // 일시정지 재개  -> paused, playing (once로 호출해서 영향없음)
         // 재생 시작 -> buffering, playing
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
