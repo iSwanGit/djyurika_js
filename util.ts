@@ -24,7 +24,7 @@ export function checkModeratorRole(memberRoles: Collection<string, Role>, cfg: C
 }
 
 export async function getYoutubeSearchList(keyword: string): Promise<YoutubeSearch> {
-  const apiUrl = `${environment.searchApiUrl}?key=${keys.youtubeApiKey}`
+  const apiUrl = `${environment.youtubeApiUrl}/search?key=${keys.youtubeApiKey}`
     + `&part=snippet&type=video&maxResults=${environment.maxSearchResults}&videoEmbeddable=true`
     + `&q=${keyword}`;
   
