@@ -3610,6 +3610,7 @@ export class DJYurika {
     // calculate current playtime. 1/3 scale
 
     let playTime: number | string = Math.round((Date.now() - conn.songStartTimestamp - conn.pauseTimeCounter)/1000);
+    if (playTime > song.duration) playTime = song.duration;
     const currentPoint = Math.round(playTime / song.duration * 100 / 4);
     let playBar: string[] | string = Array(26).fill('▬');
     playBar[currentPoint] = '🔘';
