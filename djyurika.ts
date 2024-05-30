@@ -1524,8 +1524,8 @@ export class DJYurika {
     }
     if (conn.joinedVoiceChannel && conn.subscription.player) {
       // 일시정지 풀어야 함
-      if (conn.subscription.player.state.status === AudioPlayerStatus.Paused) conn.subscription.player.unpause();
-      conn.subscription.player.stop();
+      if ([AudioPlayerStatus.Paused, AudioPlayerStatus.AutoPaused].includes(conn.subscription.player.state.status)) conn.subscription.player.unpause();
+      conn.subscription.player.stop(true);
     }
   }
   
@@ -1838,8 +1838,9 @@ export class DJYurika {
 
     switch (player.state.status) {
       case AudioPlayerStatus.Paused:
+      case AudioPlayerStatus.AutoPaused:
         player.unpause();
-        message.channel.send(`▶ \`재생\``);
+        message?.channel.send(`▶ \`재생\``);
         break;
     }
   }
@@ -2478,9 +2479,6 @@ export class DJYurika {
       //   noSubscriber: NoSubscriberBehavior.Stop
       // }
     }));
-    if (!conn.subscription) {
-      conn.subscription = subscription;
-    }
 
     try {
       // use new module play-dl
@@ -2519,7 +2517,7 @@ export class DJYurika {
           conn.pauseTimeCounter = environment.timeCounterTickInterval;
           // time counter start only if paused
           conn.pauseTimeCounterHandler = setInterval(() => {
-            if (subscription.player.state.status === AudioPlayerStatus.Paused) {
+            if ([AudioPlayerStatus.Paused, AudioPlayerStatus.AutoPaused].includes(subscription.player.state.status)) {
               conn.pauseTimeCounter += environment.timeCounterTickInterval;
             }
           }, environment.timeCounterTickInterval);
@@ -2529,6 +2527,19 @@ export class DJYurika {
         // 일시정지 재개  -> paused, playing (once로 호출해서 영향없음)
         // 재생 시작 -> buffering, playing
         console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+      })
+      .on(AudioPlayerStatus.Buffering, (oldState, newState) => {
+        // for debug 
+        console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+      })
+      .on(AudioPlayerStatus.AutoPaused, (oldState, newState) => {
+        // for debug 
+        console.info(`[${guild.name}] ${oldState.status} -> ${newState.status}`);
+        // console.log(newState)
+        getVoiceConnection(guild.id)?.configureNetworking(); // 1분 재생 후 끊김 해결 
+        // if (oldState.status === 'playing' || oldState.status === 'buffering') {
+        //   console.log(subscription.player.unpause());
+        // }
       })
       .once(AudioPlayerStatus.Idle, async (oldState, newState) => {
         // 재생 끝: playing -> idle
@@ -2622,6 +2633,11 @@ export class DJYurika {
       }
       else {
         console.error('Voice connection is gone');
+      }
+    }
+    finally { 
+      if (!conn.subscription) {
+        conn.subscription = subscription;
       }
     }
   }
